@@ -116,69 +116,80 @@ export const DataProvider = ({ children }) => {
   const criticalTables = ['lavoratori', 'cantieri', 'fornitori'];
   const secondaryTables = Object.keys(tableMapping).filter(k => !criticalTables.includes(k));
 
-  // ⚡ Carica dati per una specifica tabella (con performance tracking)
-  const fetchTable = async (key) => {
-    const tableName = tableMapping[key];
-    const startTime = performance.now();
-    
-    setLoading(prev => ({ ...prev, [key]: true }));
-    setErrors(prev => ({ ...prev, [key]: null }));
+const fetchTable = async (key) => {
+  const tableName = tableMapping[key];
+  const startTime = performance.now();
+  
+  setLoading(prev => ({ ...prev, [key]: true }));
+  setErrors(prev => ({ ...prev, [key]: null }));
 
-    try {
-      const result = await supabaseHelpers.getAll(tableName);
-      const duration = performance.now() - startTime;
-      
-      performanceLog.logQuery(tableName, duration);
+  try {
+    const result = await supabaseHelpers.getAll(tableName);
+    const duration = performance.now() - startTime;
 
-      if (result.success) {
-        console.log(`✅ Loaded ${tableName}: ${result.data?.length || 0} records (${duration.toFixed(0)}ms)`);
-        setData(prev => ({ ...prev, [key]: result.data || [] }));
-      } else {
-        console.error(`❌ Failed to load ${tableName}:`, result.error);
-        setErrors(prev => ({ ...prev, [key]: result.error }));
-        setData(prev => ({ ...prev, [key]: [] }));
-      }
-    } catch (error) {
-      const duration = performance.now() - startTime;
-      console.error(`❌ Exception loading ${tableName} (${duration.toFixed(0)}ms):`, error);
-      setErrors(prev => ({ ...prev, [key]: error.message }));
+    if (result.success) {
+      setData(prev => ({ ...prev, [key]: result.data || [] }));
+    } else {
+      console.error(`❌ Failed ${tableName}:`, result.error);
+      setErrors(prev => ({ ...prev, [key]: result.error }));
       setData(prev => ({ ...prev, [key]: [] }));
     }
-
+  } catch (error) {
+    console.error(`❌ Exception ${tableName}:`, error);
+    setErrors(prev => ({ ...prev, [key]: error.message }));
+    setData(prev => ({ ...prev, [key]: [] }));
+  } finally {
     setLoading(prev => ({ ...prev, [key]: false }));
-  };
+  }
+};
 
-  // ⚡ CARICAMENTO PRIORITIZZATO: Prima dati critici, poi secondari
-  const fetchAllData = async () => {
-    console.log('📊 Starting data load (prioritized)');
-    const totalStart = performance.now();
+const fetchAllData = async () => {
+  console.log('📊 Starting data load');
+  const totalStart = performance.now();
 
-    // ⚡ FASE 1: Carica dati CRITICI in parallelo
+  setLoading(prev => ({ ...prev, critical: true, secondary: true }));
+
+  try {
+    // FASE 1: Carica dati CRITICI con timeout
     console.log('🔴 Loading critical data...');
-    const criticalPromises = criticalTables.map(key => fetchTable(key));
-    await Promise.allSettled(criticalPromises);
+    const criticalPromises = criticalTables.map(key => 
+      Promise.race([
+        fetchTable(key),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error(`Timeout ${key}`)), 10000)
+        )
+      ]).catch(err => {
+        console.error(`Failed to load ${key}:`, err);
+        setErrors(prev => ({ ...prev, [key]: err.message }));
+      })
+    );
     
+    await Promise.allSettled(criticalPromises);
     setLoading(prev => ({ ...prev, critical: false }));
     console.log(`✅ Critical data loaded (${(performance.now() - totalStart).toFixed(0)}ms)`);
 
-    // ⚡ FASE 2: Carica dati SECONDARI in parallelo (dopo 300ms)
-    setTimeout(async () => {
-      console.log('🟡 Loading secondary data...');
-      const secondaryPromises = secondaryTables.map(key => fetchTable(key));
-      await Promise.allSettled(secondaryPromises);
-      
-      setLoading(prev => ({ ...prev, secondary: false }));
-      
-      const totalDuration = performance.now() - totalStart;
-      console.log(`✅ All data loaded (${totalDuration.toFixed(0)}ms)`);
-      
-      // ⚡ Log query più lente
-      const slowQueries = performanceLog.getSlowestQueries();
-      if (slowQueries.length > 0) {
-        console.log('🐌 Slowest queries:', slowQueries);
-      }
-    }, 300);
-  };
+    // FASE 2: Carica dati SECONDARI (SUBITO, no setTimeout)
+    console.log('🟡 Loading secondary data...');
+    const secondaryPromises = secondaryTables.map(key => 
+      Promise.race([
+        fetchTable(key),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error(`Timeout ${key}`)), 10000)
+        )
+      ]).catch(err => {
+        console.error(`Failed to load ${key}:`, err);
+        setErrors(prev => ({ ...prev, [key]: err.message }));
+      })
+    );
+    
+    await Promise.allSettled(secondaryPromises);
+    setLoading(prev => ({ ...prev, secondary: false }));
+    console.log(`✅ All data loaded (${(performance.now() - totalStart).toFixed(0)}ms)`);
+  } catch (error) {
+    console.error('❌ Fatal error loading data:', error);
+    setLoading(prev => ({ ...prev, critical: false, secondary: false }));
+  }
+};
 
   useEffect(() => {
     fetchAllData();
