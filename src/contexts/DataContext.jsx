@@ -182,6 +182,20 @@ export const DataProvider = ({ children }) => {
     return result;
   };
 
+  const getSetting = (chiave, defaultValue = null) => {
+    const setting = data.settings.find(s => s.chiave === chiave);
+    return setting ? setting.valore : defaultValue;
+  };
+
+  const setSetting = async (chiave, valore) => {
+    const existing = data.settings.find(s => s.chiave === chiave);
+    if (existing) {
+      return await updateRecord('settings', existing.id, { valore });
+    } else {
+      return await addRecord('settings', { chiave, valore, azienda_id: profile.azienda_id });
+    }
+  };
+
   const value = {
     ...data,
     loading,
@@ -190,7 +204,9 @@ export const DataProvider = ({ children }) => {
     fetchAllData,
     addRecord,
     updateRecord,
-    deleteRecord
+    deleteRecord,
+    getSetting,
+    setSetting
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
