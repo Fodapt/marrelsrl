@@ -185,11 +185,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Reset password
   const resetPassword = async (email) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'http://192.168.1.5/#/reset-password'
+        redirectTo: `${window.location.origin}/#/reset-password`
       });
       if (error) throw error;
       return { success: true };

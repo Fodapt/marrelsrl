@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { DataProvider } from './contexts/DataContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
+import ResetPassword from './components/ResetPassword';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import Footer from './components/Footer';
@@ -32,7 +34,6 @@ function AppContent() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [openDropdown, setOpenDropdown] = useState(null);
   
-  // Stati locali (solo per UI, non per dati)
   const [notePresenze, setNotePresenze] = useState([]);
   const [noteRateizzi, setNoteRateizzi] = useState([]);
   const [datiCasseLavoratori, setDatiCasseLavoratori] = useState({});
@@ -47,7 +48,6 @@ function AppContent() {
     saldoIniziale, setSaldoIniziale
   };
 
-  // ⏳ LOADING
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -59,79 +59,83 @@ function AppContent() {
     );
   }
 
-  // 🔒 NON AUTENTICATO - Mostra Login
-  if (!user || !profile) {
-    return <Login />;
-  }
-
-  // ✅ AUTENTICATO - Mostra App
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header 
-        esportaDati={() => alert('Funzione temporaneamente disabilitata')} 
-        importaDati={() => {}}
-        profile={profile}  // ✅ Passa il profilo all'header
-      />
+    <Routes>
+      {/* Route pubblica per reset password */}
+      <Route path="/reset-password" element={<ResetPassword />} />
       
-      <Navigation 
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        openDropdown={openDropdown}
-        setOpenDropdown={setOpenDropdown}
-        profile={profile}  // ✅ Passa il profilo alla navigazione
-      />
+      {/* Route protette */}
+      <Route path="/" element={
+        !user || !profile ? <Login /> : <Navigate to="/dashboard" replace />
+      } />
+      
+      <Route path="/dashboard" element={
+        !user || !profile ? <Navigate to="/" replace /> : (
+          <div className="min-h-screen bg-gray-50">
+            <Header 
+              esportaDati={() => alert('Funzione temporaneamente disabilitata')} 
+              importaDati={() => {}}
+              profile={profile}
+            />
+            
+            <Navigation 
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              openDropdown={openDropdown}
+              setOpenDropdown={setOpenDropdown}
+              profile={profile}
+            />
 
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        {activeTab === 'dashboard' && <Dashboard {...commonProps} />}
-        {activeTab === 'lavoratori' && <Lavoratori {...commonProps} />}
-        {activeTab === 'unilav' && <Unilav {...commonProps} />}
-        {activeTab === 'corsi' && <CorsiVisite {...commonProps} />}
-        {activeTab === 'automezzi' && <Automezzi {...commonProps} />}
-        {activeTab === 'subappaltatori' && <Subappaltatori {...commonProps} />}
-        {activeTab === 'cantieri' && <Cantieri {...commonProps} />}
-        {activeTab === 'fornitori' && <Fornitori {...commonProps} />}
-        {activeTab === 'sal' && <SAL {...commonProps} />}
-        {activeTab === 'certificazioni' && <Certificazioni {...commonProps} />}
-        {activeTab === 'casse' && <CasseEdili {...commonProps} />}
-        {activeTab === 'scadenzario' && <Scadenzario {...commonProps} />}
-        {activeTab === 'rateizzi' && <Rateizzi {...commonProps} />}
-        {activeTab === 'acconti' && <Acconti {...commonProps} />}
-        
-        {/* ⚠️ SEZIONI RISERVATE AGLI ADMIN */}
-        {activeTab === 'fatture-emesse' && (profile.ruolo === 'admin' ? <FattureEmesse {...commonProps} /> : <AccessDenied />)}
-        {activeTab === 'storico-paghe' && (profile.ruolo === 'admin' ? <StoricoPaghe {...commonProps} /> : <AccessDenied />)}
-        {activeTab === 'contabilita' && (profile.ruolo === 'admin' ? <Contabilita {...commonProps} /> : <AccessDenied />)}
-        
-        {activeTab === 'dtt-formulari' && <DttFormulari {...commonProps} />}
-        {activeTab === 'situazione-fornitori' && <SituazioneFornitori {...commonProps} />}
-        {activeTab === 'presenze' && <PresenzeCantieri {...commonProps} />}
-      </main>
+            <main className="max-w-7xl mx-auto px-4 py-6">
+              {activeTab === 'dashboard' && <Dashboard {...commonProps} />}
+              {activeTab === 'lavoratori' && <Lavoratori {...commonProps} />}
+              {activeTab === 'unilav' && <Unilav {...commonProps} />}
+              {activeTab === 'corsi' && <CorsiVisite {...commonProps} />}
+              {activeTab === 'automezzi' && <Automezzi {...commonProps} />}
+              {activeTab === 'subappaltatori' && <Subappaltatori {...commonProps} />}
+              {activeTab === 'cantieri' && <Cantieri {...commonProps} />}
+              {activeTab === 'fornitori' && <Fornitori {...commonProps} />}
+              {activeTab === 'sal' && <SAL {...commonProps} />}
+              {activeTab === 'certificazioni' && <Certificazioni {...commonProps} />}
+              {activeTab === 'casse' && <CasseEdili {...commonProps} />}
+              {activeTab === 'scadenzario' && <Scadenzario {...commonProps} />}
+              {activeTab === 'rateizzi' && <Rateizzi {...commonProps} />}
+              {activeTab === 'acconti' && <Acconti {...commonProps} />}
+              {activeTab === 'fatture-emesse' && (profile.ruolo === 'admin' ? <FattureEmesse {...commonProps} /> : <AccessDenied />)}
+              {activeTab === 'storico-paghe' && (profile.ruolo === 'admin' ? <StoricoPaghe {...commonProps} /> : <AccessDenied />)}
+              {activeTab === 'contabilita' && (profile.ruolo === 'admin' ? <Contabilita {...commonProps} /> : <AccessDenied />)}
+              {activeTab === 'dtt-formulari' && <DttFormulari {...commonProps} />}
+              {activeTab === 'situazione-fornitori' && <SituazioneFornitori {...commonProps} />}
+              {activeTab === 'presenze' && <PresenzeCantieri {...commonProps} />}
+            </main>
 
-      <Footer />
-    </div>
+            <Footer />
+          </div>
+        )
+      } />
+    </Routes>
   );
 }
 
-// Componente per accesso negato
 function AccessDenied() {
   return (
     <div className="bg-white rounded-lg shadow p-8 text-center">
       <p className="text-4xl mb-4">🔒</p>
       <h3 className="text-xl font-bold text-gray-800 mb-2">Accesso Negato</h3>
       <p className="text-gray-600">Non hai i permessi per accedere a questa sezione.</p>
-      <p className="text-sm text-gray-500 mt-2">Contatta un amministratore per richiedere l'accesso.</p>
     </div>
   );
 }
 
-// App principale con Provider
 function App() {
   return (
-    <AuthProvider>
-      <DataProvider>
-        <AppContent />
-      </DataProvider>
-    </AuthProvider>
+    <HashRouter>
+      <AuthProvider>
+        <DataProvider>
+          <AppContent />
+        </DataProvider>
+      </AuthProvider>
+    </HashRouter>
   );
 }
 
