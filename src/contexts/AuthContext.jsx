@@ -66,8 +66,11 @@ export const AuthProvider = ({ children }) => {
 
     // Listener auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-  console.log('🔔 Auth event:', event, 'Session:', session?.user?.email || 'none');
-
+    console.log('🔔 Auth event:', event, 'Session:', session?.user?.email || 'none');
+    
+    if (event === 'PASSWORD_RECOVERY') {
+      window.location.hash = '#/reset-password';
+    }
   setUser(session?.user ?? null);
 
   if (session?.user) {
@@ -188,7 +191,7 @@ export const AuthProvider = ({ children }) => {
   const resetPassword = async (email) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `https://fodapt.github.io/marrelsrl/#/reset-password`
+        redirectTo: `https://fodapt.github.io/marrelsrl/`
       });
       if (error) throw error;
       return { success: true };
