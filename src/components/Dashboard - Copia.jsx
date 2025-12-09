@@ -16,26 +16,13 @@ function Dashboard() {
   } = useData();
 
   // Calcola lavoratori attivi
- const lavoratoriAttivi = useMemo(() => {
-  return lavoratori.filter(l => {
-    if (l.ruolo === 'amministratore' || l.ruolo === 'direttore_tecnico') return false;
-    
-    const univlavLav = unilav.filter(u => u.lavoratore_id === l.id);
-    if (univlavLav.length === 0) return false;
-    
-    const ultimoUnilav = univlavLav.sort((a, b) => 
-      new Date(b.data_inizio || '1900-01-01') - new Date(a.data_inizio || '1900-01-01')
-    )[0];
-    
-    // Se l'ultimo unilav è dimissioni e la data è passata, NON è attivo
-    if (ultimoUnilav.tipo_unilav === 'dimissioni') {
-      const dataDimissioni = new Date(ultimoUnilav.data_inizio);
-      return dataDimissioni > new Date();
-    }
-    
-    return true;
-  });
-}, [lavoratori, unilav]);
+  const lavoratoriAttivi = useMemo(() => {
+    return lavoratori.filter(l => {
+      if (l.ruolo === 'amministratore' || l.ruolo === 'direttore_tecnico') return false;
+      const hasUnilav = unilav.some(u => u.lavoratore_id === l.id);
+      return hasUnilav;
+    });
+  }, [lavoratori, unilav]);
 
   // Calcola scadenze imminenti (prossimi 30 giorni)
   const calcolaScadenze = (lavoratoriAttivi) => {
@@ -197,120 +184,13 @@ function Dashboard() {
         if (!grouped[cantiereId]) grouped[cantiereId] = [];
         grouped[cantiereId].push({
           ...lavoratore,
-          livello: ultimoUnilav.livello,
-          qualifica: ultimoUnilav.qualifica,
-          data_inizio: ultimoUnilav.data_inizio
+          livello: ultimoUnilav.livello
         });
       }
     });
     
     return grouped;
   }, [lavoratoriAttivi, unilav]);
-
-  // ✅ EXPORT PDF LAVORATORI PER CANTIERE
-  const exportPDFLavoratori = () => {
-    const oggi = new Date();
-    const dataStampa = oggi.toLocaleDateString('it-IT', { 
-      day: '2-digit', 
-      month: '2-digit', 
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-
-    let totLavoratori = 0;
-    Object.values(lavoratoriPerCantiere).forEach(lav => {
-      totLavoratori += lav.length;
-    });
-
-    let html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Lavoratori per Cantiere</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; font-size: 11px; }
-    h1 { color: #1e40af; border-bottom: 3px solid #1e40af; padding-bottom: 10px; }
-    h2 { color: #2563eb; margin-top: 25px; margin-bottom: 10px; font-size: 16px; }
-    table { border-collapse: collapse; width: 100%; margin: 15px 0; }
-    th, td { border: 1px solid #333; padding: 8px; text-align: left; }
-    th { background-color: #3b82f6; color: white; font-weight: bold; }
-    tr:nth-child(even) { background-color: #f3f4f6; }
-    .summary { background: #eff6ff; padding: 15px; border-radius: 5px; margin: 20px 0; }
-    .cantiere-box { margin-bottom: 30px; page-break-inside: avoid; }
-    @media print {
-      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      button { display: none !important; }
-      .cantiere-box { page-break-inside: avoid; }
-    }
-  </style>
-</head>
-<body>
-  <button onclick="window.print()" style="background: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px;">
-    🖨️ Stampa / Salva PDF
-  </button>
-  
-  <h1>🏗️ Lavoratori per Cantiere</h1>
-  <p><strong>Data Stampa:</strong> ${dataStampa}</p>
-  
-  <div class="summary">
-    <p><strong>Cantieri Attivi:</strong> ${Object.keys(lavoratoriPerCantiere).length}</p>
-    <p><strong>Lavoratori Totali:</strong> ${totLavoratori}</p>
-  </div>
-`;
-
-    // Genera sezione per ogni cantiere
-    Object.entries(lavoratoriPerCantiere).forEach(([cantiereId, lav]) => {
-      const cantiere = cantieri.find(c => c.id === cantiereId);
-      const nomeCantiere = cantiere ? cantiere.nome : `Cantiere ${cantiereId}`;
-      const indirizzoCantiere = cantiere ? `${cantiere.indirizzo || ''} ${cantiere.citta || ''}`.trim() : '';
-
-      html += `
-  <div class="cantiere-box">
-    <h2>📍 ${nomeCantiere}</h2>
-    ${indirizzoCantiere ? `<p style="margin-top: -10px; color: #666;"><em>${indirizzoCantiere}</em></p>` : ''}
-    <p><strong>Numero Lavoratori:</strong> ${lav.length}</p>
-    
-    <table>
-      <thead>
-        <tr>
-          <th>Nome Completo</th>
-          <th>Qualifica</th>
-          <th>Livello</th>
-          <th>Data Inizio</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${lav.map(l => `
-        <tr>
-          <td><strong>${l.nome} ${l.cognome}</strong></td>
-          <td>${l.qualifica || '-'}</td>
-          <td>${l.livello || '-'}</td>
-          <td>${formatDate(l.data_inizio)}</td>
-        </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  </div>
-`;
-    });
-
-    html += `
-  <div style="margin-top: 30px; padding: 10px; background: #eff6ff; border-top: 2px solid #1e40af; font-size: 9px;">
-    <p>Documento generato automaticamente da Marrel S.r.l. - ${dataStampa}</p>
-  </div>
-</body>
-</html>`;
-
-    const nuovaFinestra = window.open('', '_blank');
-    if (nuovaFinestra) {
-      nuovaFinestra.document.write(html);
-      nuovaFinestra.document.close();
-    } else {
-      alert('⚠️ Popup bloccato! Abilita i popup per questo sito.');
-    }
-  };
 
   // ✅ LOADING DOPO TUTTI GLI HOOK
   if (loading.lavoratori || loading.cantieri || loading.unilav) {
@@ -415,17 +295,7 @@ function Dashboard() {
 
       {/* Lavoratori per Cantiere */}
       <div className="bg-white p-6 rounded-lg shadow">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold">🏗️ Lavoratori per Cantiere</h3>
-          {Object.keys(lavoratoriPerCantiere).length > 0 && (
-            <button 
-              onClick={exportPDFLavoratori}
-              className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 text-sm">
-              📄 Esporta PDF
-            </button>
-          )}
-        </div>
-        
+        <h3 className="text-lg font-semibold mb-4">🏗️ Lavoratori per Cantiere</h3>
         {Object.keys(lavoratoriPerCantiere).length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <p className="text-4xl mb-2">👷</p>
@@ -437,30 +307,14 @@ function Dashboard() {
               const cantiere = cantieri.find(c => c.id === cantiereId);
               return (
                 <div key={cantiereId} className="border rounded-lg p-4">
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <h4 className="font-semibold text-blue-600 text-lg">
-                        {cantiere ? cantiere.nome : `Cantiere ${cantiereId}`}
-                      </h4>
-                      {cantiere?.indirizzo && (
-                        <p className="text-sm text-gray-600">
-                          {cantiere.indirizzo} {cantiere.citta}
-                        </p>
-                      )}
-                    </div>
-                    <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-semibold">
-                      {lav.length} {lav.length === 1 ? 'lavoratore' : 'lavoratori'}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <h4 className="font-semibold text-blue-600 mb-2">
+                    {cantiere ? cantiere.nome : `Cantiere ${cantiereId}`}
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     {lav.map(l => (
-                      <div key={l.id} className="bg-gray-50 p-3 rounded border border-gray-200">
-                        <p className="font-semibold text-blue-900">{l.nome} {l.cognome}</p>
-                        <div className="text-xs text-gray-600 mt-1 space-y-0.5">
-                          {l.qualifica && <p>👔 {l.qualifica}</p>}
-                          {l.livello && <p>📊 Livello: {l.livello}</p>}
-                          {l.data_inizio && <p>📅 Dal: {formatDate(l.data_inizio)}</p>}
-                        </div>
+                      <div key={l.id} className="bg-gray-50 p-2 rounded text-sm">
+                        <p className="font-medium">{l.nome} {l.cognome}</p>
+                        <p className="text-gray-600">Livello: {l.livello}</p>
                       </div>
                     ))}
                   </div>

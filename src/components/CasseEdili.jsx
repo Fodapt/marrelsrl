@@ -427,7 +427,7 @@ function CassaEdile() {
                 >
                   <option value="">Seleziona lavoratore</option>
                   {lavoratori.map(l => (
-                    <option key={l.id} value={l.id}>{l.nome} {l.cognome}</option>
+                    <option key={l.id} value={l.id}>{l.cognome} {l.nome}</option>
                   ))}
                 </select>
               </div>

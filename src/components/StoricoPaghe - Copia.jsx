@@ -68,178 +68,6 @@ function StoricoPaghe() {
     return { totaleImporti, totaleBonificato, residuo };
   }, [storicoPaghe, filtroLavoratore]);
 
-  // ✅ EXPORT PDF RAGGRUPPATO PER LAVORATORE
-  const exportPDF = () => {
-    if (pagheFiltrate.length === 0) {
-      return alert('⚠️ Nessuna paga da esportare');
-    }
-
-    const oggi = new Date();
-    const dataStampa = oggi.toLocaleDateString('it-IT', { 
-      day: '2-digit', 
-      month: '2-digit', 
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-
-    // Raggruppa per lavoratore
-    const paghePerLavoratore = {};
-    pagheFiltrate.forEach(paga => {
-      if (!paghePerLavoratore[paga.lavoratore_id]) {
-        paghePerLavoratore[paga.lavoratore_id] = [];
-      }
-      paghePerLavoratore[paga.lavoratore_id].push(paga);
-    });
-
-    // Ordina le paghe di ogni lavoratore per data (anno e mese)
-    Object.keys(paghePerLavoratore).forEach(lavoratoreId => {
-      paghePerLavoratore[lavoratoreId].sort((a, b) => {
-        if (a.anno !== b.anno) return b.anno - a.anno;
-        return b.mese - a.mese;
-      });
-    });
-
-    // Calcola totali generali
-    const totaleImporti = pagheFiltrate.reduce((sum, p) => sum + parseFloat(p.importo || 0), 0);
-    const totaleBonificato = pagheFiltrate.reduce((sum, p) => sum + calcolaBonificato(p), 0);
-    const totaleResiduo = totaleImporti - totaleBonificato;
-
-    const titolo = filtroLavoratore 
-      ? `Storico Paghe - ${lavoratori.find(l => l.id === filtroLavoratore)?.nome} ${lavoratori.find(l => l.id === filtroLavoratore)?.cognome}`
-      : 'Storico Paghe - Tutti i Lavoratori';
-
-    let html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>${titolo}</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; font-size: 11px; }
-    h1 { color: #1e40af; border-bottom: 3px solid #1e40af; padding-bottom: 10px; }
-    h2 { color: #2563eb; font-size: 16px; margin-top: 25px; margin-bottom: 10px; background: #eff6ff; padding: 10px; border-left: 4px solid #3b82f6; }
-    table { border-collapse: collapse; width: 100%; margin: 15px 0; }
-    th, td { border: 1px solid #333; padding: 8px; text-align: left; }
-    th { background-color: #3b82f6; color: white; font-weight: bold; }
-    tr:nth-child(even) { background-color: #f3f4f6; }
-    .text-right { text-align: right; }
-    .note-cell { font-style: italic; color: #6b7280; font-size: 10px; padding-top: 4px; }
-    .summary { background: #eff6ff; padding: 15px; border-radius: 5px; margin: 20px 0; }
-    .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
-    .summary-box { background: white; padding: 10px; border-radius: 5px; border: 2px solid #3b82f6; }
-    .summary-label { font-size: 10px; color: #1e40af; margin-bottom: 5px; }
-    .summary-value { font-size: 18px; font-weight: bold; color: #1e3a8a; }
-    .lavoratore-totale { background-color: #dbeafe; font-weight: bold; }
-    @media print {
-      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      button { display: none !important; }
-      .lavoratore-section { page-break-inside: avoid; }
-    }
-  </style>
-</head>
-<body>
-  <button onclick="window.print()" style="background: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px;">
-    🖨️ Stampa / Salva PDF
-  </button>
-  
-  <h1>💼 ${titolo}</h1>
-  <p><strong>Data Stampa:</strong> ${dataStampa}</p>
-  <p><strong>Numero Record:</strong> ${pagheFiltrate.length}</p>
-  
-  <div class="summary">
-    <div class="summary-grid">
-      <div class="summary-box">
-        <div class="summary-label">Totale Importi</div>
-        <div class="summary-value">€ ${totaleImporti.toFixed(2)}</div>
-      </div>
-      <div class="summary-box" style="border-color: #10b981;">
-        <div class="summary-label" style="color: #059669;">Totale Bonificato</div>
-        <div class="summary-value" style="color: #047857;">€ ${totaleBonificato.toFixed(2)}</div>
-      </div>
-      <div class="summary-box" style="border-color: #f59e0b;">
-        <div class="summary-label" style="color: #d97706;">Residuo Totale</div>
-        <div class="summary-value" style="color: #b45309;">€ ${totaleResiduo.toFixed(2)}</div>
-      </div>
-    </div>
-  </div>
-`;
-
-    // Genera sezione per ogni lavoratore
-    Object.entries(paghePerLavoratore).forEach(([lavoratoreId, paghe]) => {
-      const lavoratore = lavoratori.find(l => l.id === lavoratoreId);
-      const nomeLavoratore = lavoratore ? `${lavoratore.nome} ${lavoratore.cognome}` : 'Lavoratore Sconosciuto';
-      
-      // Calcola totali per questo lavoratore
-      const totLavoratore = paghe.reduce((sum, p) => sum + parseFloat(p.importo || 0), 0);
-      const bonLavoratore = paghe.reduce((sum, p) => sum + calcolaBonificato(p), 0);
-      const resLavoratore = totLavoratore - bonLavoratore;
-
-      html += `
-  <div class="lavoratore-section">
-    <h2>👤 ${nomeLavoratore}</h2>
-    <p><strong>Numero Paghe:</strong> ${paghe.length}</p>
-    
-    <table>
-      <thead>
-        <tr>
-          <th>Periodo</th>
-          <th>Tipologia</th>
-          <th>Cantiere</th>
-          <th class="text-right">Importo</th>
-          <th class="text-right">Bonificato</th>
-          <th class="text-right">Residuo</th>
-          <th>Note</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${paghe.map(paga => {
-          const cantiere = cantieri.find(c => c.id === paga.cantiere_id);
-          const tipologia = tipologie.find(t => t.value === paga.tipologia);
-          const bonificato = calcolaBonificato(paga);
-          const residuo = calcolaResiduo(paga);
-
-          return `
-          <tr>
-            <td>${mesiNomi[paga.mese - 1]} ${paga.anno}</td>
-            <td>${tipologia?.label || paga.tipologia}</td>
-            <td>${cantiere?.nome || '-'}</td>
-            <td class="text-right">€ ${parseFloat(paga.importo).toFixed(2)}</td>
-            <td class="text-right" style="color: #059669;">€ ${bonificato.toFixed(2)}</td>
-            <td class="text-right" style="color: #d97706; font-weight: bold;">€ ${residuo.toFixed(2)}</td>
-            <td>${paga.note || '-'}</td>
-          </tr>
-          `;
-        }).join('')}
-        <tr class="lavoratore-totale">
-          <td colspan="3" style="text-align: right; padding-right: 10px;">TOTALE ${nomeLavoratore.toUpperCase()}:</td>
-          <td class="text-right">€ ${totLavoratore.toFixed(2)}</td>
-          <td class="text-right" style="color: #059669;">€ ${bonLavoratore.toFixed(2)}</td>
-          <td class="text-right" style="color: #d97706;">€ ${resLavoratore.toFixed(2)}</td>
-          <td></td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-`;
-    });
-
-    html += `
-  <div style="margin-top: 30px; padding: 10px; background: #eff6ff; border-top: 2px solid #1e40af; font-size: 9px;">
-    <p>Documento generato automaticamente da Marrel S.r.l. - ${dataStampa}</p>
-  </div>
-</body>
-</html>`;
-
-    const nuovaFinestra = window.open('', '_blank');
-    if (nuovaFinestra) {
-      nuovaFinestra.document.write(html);
-      nuovaFinestra.document.close();
-    } else {
-      alert('⚠️ Popup bloccato! Abilita i popup per questo sito.');
-    }
-  };
-
   // ✅ MOSTRA LOADING
   if (loading.storicoPaghe || loading.lavoratori || loading.cantieri) {
     return (
@@ -374,33 +202,22 @@ function StoricoPaghe() {
     <div className="space-y-4">
       {/* Header con filtri */}
       <div className="flex justify-between items-center">
-        <div className="flex gap-2">
-          <button 
-            onClick={() => {
-              setShowForm(true);
-              setEditingId(null);
-              setFormData({ 
-                mese: new Date().getMonth() + 1,
-                anno: new Date().getFullYear(),
-                tipologia: 'stipendio',
-                bonifici: []
-              });
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }} 
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          >
-            ➕ Nuova Paga
-          </button>
-          
-          {pagheFiltrate.length > 0 && (
-            <button 
-              onClick={exportPDF}
-              className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
-            >
-              📄 Esporta PDF
-            </button>
-          )}
-        </div>
+        <button 
+          onClick={() => {
+            setShowForm(true);
+            setEditingId(null);
+            setFormData({ 
+              mese: new Date().getMonth() + 1,
+              anno: new Date().getFullYear(),
+              tipologia: 'stipendio',
+              bonifici: []
+            });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }} 
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
+          ➕ Nuova Paga
+        </button>
 
         <select 
           className="border rounded px-3 py-2"
@@ -409,7 +226,7 @@ function StoricoPaghe() {
         >
           <option value="">Tutti i lavoratori</option>
           {lavoratori.map(l => (
-            <option key={l.id} value={l.id}>{l.cognome} {l.nome}</option>
+            <option key={l.id} value={l.id}>{l.nome} {l.cognome}</option>
           ))}
         </select>
       </div>
@@ -455,7 +272,7 @@ function StoricoPaghe() {
               >
                 <option value="">Seleziona dipendente</option>
                 {lavoratori.map(l => (
-                  <option key={l.id} value={l.id}>{l.cognome} {l.nome}</option>
+                  <option key={l.id} value={l.id}>{l.nome} {l.cognome}</option>
                 ))}
               </select>
             </div>
@@ -594,7 +411,6 @@ function StoricoPaghe() {
               <th className="px-3 py-2 text-right">Importo</th>
               <th className="px-3 py-2 text-right">Bonificato</th>
               <th className="px-3 py-2 text-right">Residuo</th>
-              <th className="px-3 py-2 text-left">Note</th>
               <th className="px-3 py-2 text-center">Azioni</th>
             </tr>
           </thead>
@@ -612,12 +428,7 @@ function StoricoPaghe() {
                     {lavoratore ? `${lavoratore.nome} ${lavoratore.cognome}` : '-'}
                   </td>
                   <td className="px-3 py-2">
-                    <div className="font-medium">{mesiNomi[paga.mese - 1]} {paga.anno}</div>
-                    {cantiere && (
-                      <div className="text-xs text-blue-600 mt-1">
-                        📍 {cantiere.nome}
-                      </div>
-                    )}
+                    {mesiNomi[paga.mese - 1]} {paga.anno}
                   </td>
                   <td className="px-3 py-2">{tipologia?.label || paga.tipologia}</td>
                   <td className="px-3 py-2">{cantiere?.nome || '-'}</td>
@@ -625,9 +436,6 @@ function StoricoPaghe() {
                   <td className="px-3 py-2 text-right text-green-700 font-mono">€ {bonificato.toFixed(2)}</td>
                   <td className="px-3 py-2 text-right font-semibold text-orange-700 font-mono">
                     € {residuo.toFixed(2)}
-                  </td>
-                  <td className="px-3 py-2 text-gray-600 italic text-xs">
-                    {paga.note || '-'}
                   </td>
                   <td className="px-3 py-2 text-center">
                     <button 

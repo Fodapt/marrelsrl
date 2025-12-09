@@ -73,6 +73,7 @@ const getUserCompany = async () => {
 
 // Helper per operazioni CRUD comuni
 export const supabaseHelpers = {
+  // ✅ GET all records (FILTRA PER AZIENDA)
   async getAll(table) {
     console.log(`🔵 GET ALL ${table} START`);
     const startTime = performance.now();
@@ -82,33 +83,21 @@ export const supabaseHelpers = {
       return companyResult;
     }
 
-    // TIMEOUT di 8 secondi
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Query timeout')), 8000)
-    );
-
-    const queryPromise = supabase
+    const { data, error } = await supabase
       .from(table)
       .select('*')
       .eq('azienda', companyResult.azienda)
       .order('created_at', { ascending: false });
-
-    try {
-      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
-      const duration = performance.now() - startTime;
-      
-      if (error) {
-        console.error(`❌ GET ALL ${table} ERROR (${duration.toFixed(0)}ms):`, error);
-        return handleSupabaseError(error);
-      }
-      
-      console.log(`✅ GET ALL ${table} SUCCESS (${duration.toFixed(0)}ms): ${data?.length || 0} records`);
-      return { success: true, data };
-    } catch (error) {
-      const duration = performance.now() - startTime;
-      console.error(`❌ TIMEOUT ${table} (${duration.toFixed(0)}ms)`);
-      return { success: false, error: 'Timeout della query' };
+    
+    const duration = performance.now() - startTime;
+    
+    if (error) {
+      console.error(`❌ GET ALL ${table} ERROR (${duration.toFixed(0)}ms):`, error);
+      return handleSupabaseError(error);
     }
+    
+    console.log(`✅ GET ALL ${table} SUCCESS (${duration.toFixed(0)}ms): ${data?.length || 0} records`);
+    return { success: true, data };
   },
 
   // ✅ GET by ID (FILTRA PER AZIENDA)

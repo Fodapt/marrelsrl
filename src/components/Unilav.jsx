@@ -227,7 +227,7 @@ const filteredUnilav = (() => {
             <option value="">Tutti i lavoratori</option>
             {lavoratori.map(l => (
               <option key={l.id} value={l.id}>
-                {l.nome} {l.cognome}
+                {l.cognome} {l.nome}
               </option>
             ))}
           </select>
@@ -306,7 +306,7 @@ const filteredUnilav = (() => {
                 disabled={saving}
               >
                 <option value="">Seleziona lavoratore</option>
-                {lavoratori.map(l => <option key={l.id} value={l.id}>{l.nome} {l.cognome}</option>)}
+                {lavoratori.map(l => <option key={l.id} value={l.id}>{l.cognome} {l.nome}</option>)}
               </select>
             </div>
             

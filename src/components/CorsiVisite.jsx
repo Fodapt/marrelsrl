@@ -193,7 +193,7 @@ function CorsiVisite() {
             <option value="">Tutti i lavoratori</option>
             {lavoratori.map(l => (
               <option key={l.id} value={l.id}>
-                {l.nome} {l.cognome}
+                {l.cognome} {l.nome}
               </option>
             ))}
           </select>
@@ -233,7 +233,7 @@ function CorsiVisite() {
             >
               <option value="">Lavoratore *</option>
               {lavoratori.map(l => (
-                <option key={l.id} value={l.id}>{l.nome} {l.cognome}</option>
+                <option key={l.id} value={l.id}>{l.cognome} {l.nome}</option>
               ))}
             </select>
             <select 

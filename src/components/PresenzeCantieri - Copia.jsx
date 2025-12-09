@@ -8,7 +8,6 @@ function PresenzeCantieri() {
     lavoratori = [],
     cantieri = [],
     unilav = [],
-    notePresenze = [], // ✅ Ora disponibile da DataContext
     loading,
     addRecord,
     updateRecord,
@@ -25,23 +24,8 @@ function PresenzeCantieri() {
   const [selectedDays, setSelectedDays] = useState(new Set());
   const [selectionMode, setSelectionMode] = useState(false);
   
-  // ✅ AGGIUNTO: Campo ore_permesso
-  const [formData, setFormData] = useState({ 
-    tipo: 'lavoro', 
-    ore: '8', 
-    orePermesso: '', // ✅ NUOVO
-    cantiere: '', 
-    note: '' 
-  });
-  
-  const [bulkFormData, setBulkFormData] = useState({ 
-    tipo: 'lavoro', 
-    ore: '8', 
-    orePermesso: '', // ✅ NUOVO
-    cantiere: '', 
-    note: '' 
-  });
-  
+  const [formData, setFormData] = useState({ tipo: 'lavoro', ore: '8', cantiere: '', note: '' });
+  const [bulkFormData, setBulkFormData] = useState({ tipo: 'lavoro', ore: '8', cantiere: '', note: '' });
   const [saving, setSaving] = useState(false);
 
   const [notaMensile, setNotaMensile] = useState('');
@@ -51,16 +35,6 @@ function PresenzeCantieri() {
     'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
 
   const anni = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 2 + i);
-  // Funzione per controllare se il lavoratore ha dimissioni nel periodo
-const checkDimissioni = (lavoratoreId, date) => {
-  const univlavLav = unilav.filter(u => u.lavoratore_id === lavoratoreId);
-  const dimissioni = univlavLav.find(u => u.tipo_unilav === 'dimissioni');
-  
-  if (!dimissioni || !dimissioni.data_inizio) return null;
-  
-  const dataDim = new Date(dimissioni.data_inizio);
-  return date >= dataDim ? dataDim : null;
-};
 
   const tipiPresenza = [
     { value: 'lavoro', label: 'Lavoro', color: 'bg-green-200 border-green-500' },
@@ -78,14 +52,16 @@ const checkDimissioni = (lavoratoreId, date) => {
     }
   }, [lavoratori]);
 
-  // ✅ CARICA NOTA MENSILE (CORRETTO)
+  // ✅ Carica nota mensile
   useEffect(() => {
     if (!selectedWorker) return;
 
-    const notaEsistente = notePresenze.find(n => 
-      n.lavoratore_id === selectedWorker &&
-      n.anno === selectedYear &&
-      n.mese === selectedMonth
+    // Cerca nota mensile esistente
+    const notaEsistente = presenze.find(p => 
+      p.lavoratore_id === selectedWorker &&
+      p.anno === selectedYear &&
+      p.mese === selectedMonth &&
+      p.is_nota_mensile === true
     );
 
     if (notaEsistente) {
@@ -95,7 +71,7 @@ const checkDimissioni = (lavoratoreId, date) => {
       setNotaMensile('');
       setNotaMensileId(null);
     }
-  }, [selectedWorker, selectedYear, selectedMonth, notePresenze]);
+  }, [selectedWorker, selectedYear, selectedMonth, presenze]);
 
   // ✅ MOSTRA LOADING
   if (loading.presenze || loading.lavoratori || loading.cantieri || loading.unilav) {
@@ -123,34 +99,22 @@ const checkDimissioni = (lavoratoreId, date) => {
   });
 
   const getCantiereFromUnilav = (lavoratoreId, date) => {
-  // Normalizza sempre la data a mezzanotte
-  let targetDate;
-  if (typeof date === 'string') {
-    const [year, month, day] = date.split('-').map(Number);
-    targetDate = new Date(year, month - 1, day);
-  } else {
-    targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  }
-  
-  const univlavLavoratore = unilav.filter(u => u.lavoratore_id === lavoratoreId);
-  
-  const univlavAttivi = univlavLavoratore.filter(u => {
-    // Normalizza anche le date di inizio/fine a mezzanotte
-    const inizioStr = u.data_inizio.split('T')[0];
-    const [yI, mI, dI] = inizioStr.split('-').map(Number);
-    const inizio = new Date(yI, mI - 1, dI);
-    
-    let fine;
-    if (u.data_fine) {
-      const fineStr = u.data_fine.split('T')[0];
-      const [yF, mF, dF] = fineStr.split('-').map(Number);
-      fine = new Date(yF, mF - 1, dF);
+    let targetDate;
+    if (typeof date === 'string') {
+      targetDate = new Date(date);
     } else {
-      fine = new Date(2099, 11, 31);
+      targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     }
     
-    return targetDate >= inizio && targetDate <= fine;
-  });
+    const univlavLavoratore = unilav.filter(u => u.lavoratore_id === lavoratoreId);
+    
+    const univlavAttivi = univlavLavoratore.filter(u => {
+      const inizio = new Date(u.data_inizio);
+      const fine = u.data_fine ? new Date(u.data_fine) : new Date(2099, 11, 31);
+      
+      return targetDate >= inizio && targetDate <= fine;
+    });
+    
     if (univlavAttivi.length === 0) return null;
     
     if (univlavAttivi.length > 1) {
@@ -188,8 +152,7 @@ const checkDimissioni = (lavoratoreId, date) => {
   };
 
   const getTipoInfo = (tipo) => tipiPresenza.find(t => t.value === tipo);
-
-  // ✅ APRI MODAL SINGOLA PRESENZA (AGGIUNTO ore_permesso)
+  // ✅ APRI MODAL SINGOLA PRESENZA
   const openModal = (date) => {
     if (selectionMode) { 
       toggleDaySelection(date); 
@@ -203,7 +166,6 @@ const checkDimissioni = (lavoratoreId, date) => {
         tipo: existing.tipo,
         ore: existing.ore?.toString() || '',
         orePioggia: existing.ore_pioggia?.toString() || '',
-        orePermesso: existing.ore_permesso?.toString() || '', // ✅ CARICA ore_permesso
         cantiere: existing.cantiere_id || '',
         note: existing.note || ''
       });
@@ -213,7 +175,6 @@ const checkDimissioni = (lavoratoreId, date) => {
         tipo: 'lavoro', 
         ore: '8', 
         orePioggia: '', 
-        orePermesso: '', // ✅ RESET
         cantiere: suggestedCantiere || '', 
         note: '' 
       });
@@ -221,7 +182,7 @@ const checkDimissioni = (lavoratoreId, date) => {
     setShowModal(true);
   };
 
-  // ✅ SALVA PRESENZA SINGOLA (AGGIUNTO ore_permesso)
+  // ✅ SALVA PRESENZA SINGOLA
   const savePresenza = async () => {
     if (!selectedDate) return;
     
@@ -234,11 +195,11 @@ const checkDimissioni = (lavoratoreId, date) => {
       tipo: formData.tipo,
       ore: parseFloat(formData.ore) || 0,
       ore_pioggia: parseFloat(formData.orePioggia) || 0,
-      ore_permesso: parseFloat(formData.orePermesso) || 0, // ✅ SALVA ore_permesso
       cantiere_id: formData.cantiere || null,
       note: formData.note || null
     };
 
+    // Cerca se esiste già una presenza per questa data
     const existing = getPresenzaForDate(selectedWorker, selectedDate);
     
     let result;
@@ -253,7 +214,7 @@ const checkDimissioni = (lavoratoreId, date) => {
     if (result.success) {
       setShowModal(false);
       setSelectedDate(null);
-      setFormData({ tipo: 'lavoro', ore: '8', orePioggia: '', orePermesso: '', cantiere: '', note: '' });
+      setFormData({ tipo: 'lavoro', ore: '8', orePioggia: '', cantiere: '', note: '' });
     } else {
       alert('❌ Errore: ' + result.error);
     }
@@ -299,11 +260,11 @@ const checkDimissioni = (lavoratoreId, date) => {
     if (selectedDays.size === 0) return;
     const firstDate = Array.from(selectedDays)[0];
     const suggestedCantiere = getCantiereFromUnilav(selectedWorker, firstDate) || '';
-    setBulkFormData({ tipo: 'lavoro', ore: '8', orePioggia: '', orePermesso: '', cantiere: suggestedCantiere, note: '' });
+    setBulkFormData({ tipo: 'lavoro', ore: '8', orePioggia: '', cantiere: suggestedCantiere, note: '' });
     setShowBulkModal(true);
   };
 
-  // ✅ APPLICA MODIFICA MULTIPLA (AGGIUNTO ore_permesso)
+  // ✅ APPLICA MODIFICA MULTIPLA
   const applyBulkEdit = async () => {
     setSaving(true);
     
@@ -314,11 +275,11 @@ const checkDimissioni = (lavoratoreId, date) => {
         tipo: bulkFormData.tipo,
         ore: parseFloat(bulkFormData.ore) || 0,
         ore_pioggia: parseFloat(bulkFormData.orePioggia) || 0,
-        ore_permesso: parseFloat(bulkFormData.orePermesso) || 0, // ✅ SALVA ore_permesso
         cantiere_id: bulkFormData.cantiere || null,
         note: bulkFormData.note || null
       };
 
+      // Cerca se esiste già
       const existing = presenze.find(p => 
         p.lavoratore_id === selectedWorker && 
         p.data === dateStr
@@ -376,16 +337,15 @@ const checkDimissioni = (lavoratoreId, date) => {
     
     const promises = daysInMonth
       .filter(day => {
-  if (day.getDay() === 0 || day.getDay() === 6) return false;
-  const esistente = getPresenzaForDate(selectedWorker, day);
-  if (esistente) return false;
-  
-  // ✅ Controlla dimissioni
-  const dataDimissioni = checkDimissioni(selectedWorker, day);
-  if (dataDimissioni) return false;
-  
-  return true;
-})
+        // Solo giorni feriali
+        if (day.getDay() === 0 || day.getDay() === 6) return false;
+        
+        // Salta se esiste già presenza
+        const esistente = getPresenzaForDate(selectedWorker, day);
+        if (esistente) return false;
+        
+        return true;
+      })
       .map(async (day) => {
         const dateStr = day.toISOString().split('T')[0];
         
@@ -397,7 +357,6 @@ const checkDimissioni = (lavoratoreId, date) => {
             tipo: 'festivita',
             ore: 0,
             ore_pioggia: 0,
-            ore_permesso: 0,
             cantiere_id: null,
             note: 'Festività'
           });
@@ -412,7 +371,6 @@ const checkDimissioni = (lavoratoreId, date) => {
             tipo: 'lavoro',
             ore: 8,
             ore_pioggia: 0,
-            ore_permesso: 0,
             cantiere_id: cantiereId,
             note: 'Auto-compilato da UniLav'
           });
@@ -428,29 +386,24 @@ const checkDimissioni = (lavoratoreId, date) => {
     alert(`✅ Auto-compilazione completata!\n\n• ${giorniAggiunti} giorni lavorativi aggiunti\n• ${festivitaAggiunte} festività aggiunte`);
   };
 
-  // ✅ SALVA NOTA MENSILE (CORRETTO)
+  // ✅ SALVA NOTA MENSILE
   const saveNotaMensile = async () => {
     setSaving(true);
 
     let result;
     if (notaMensileId) {
-      // ✅ Aggiorna nota esistente
+      // Aggiorna nota esistente
       result = await updateRecord('notePresenze', notaMensileId, {
         nota: notaMensile
       });
     } else {
-      // ✅ Crea nuova nota
+      // Crea nuova nota
       result = await addRecord('notePresenze', {
         lavoratore_id: selectedWorker,
         anno: selectedYear,
         mese: selectedMonth,
         nota: notaMensile
       });
-      
-      // Se creata con successo, salva l'ID
-      if (result.success && result.data) {
-        setNotaMensileId(result.data.id);
-      }
     }
 
     setSaving(false);
@@ -460,7 +413,7 @@ const checkDimissioni = (lavoratoreId, date) => {
     }
   };
 
-  // ✅ RIEPILOGO MENSILE (AGGIORNATO per usare ore_permesso dal DB)
+  // ✅ RIEPILOGO MENSILE
   const riepilogo = useMemo(() => {
     const summary = { 
       oreLavoro: 0, 
@@ -479,7 +432,6 @@ const checkDimissioni = (lavoratoreId, date) => {
       if (presenza) {
         const ore = parseFloat(presenza.ore) || 0;
         const orePioggia = parseFloat(presenza.ore_pioggia) || 0;
-        const orePermesso = parseFloat(presenza.ore_permesso) || 0; // ✅ LEGGI dal DB
         
         switch (presenza.tipo) {
           case 'lavoro':
@@ -487,9 +439,9 @@ const checkDimissioni = (lavoratoreId, date) => {
             summary.giorniLavoro += 1;
             if (orePioggia > 0) summary.orePioggia += orePioggia;
             
-            // ✅ USA ore_permesso dal database
-            if (orePermesso > 0) {
-              summary.orePermesso += orePermesso;
+            // Calcolo ore permesso
+            if (ore < 8) {
+              summary.orePermesso += (8 - ore);
             }
             
             if (presenza.cantiere_id) {
@@ -516,7 +468,6 @@ const checkDimissioni = (lavoratoreId, date) => {
     });
     return summary;
   }, [presenze, selectedWorker, daysInMonth]);
-
   if (lavoratori.length === 0) {
     return (
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
@@ -561,7 +512,7 @@ const checkDimissioni = (lavoratoreId, date) => {
             >
               {lavoratori.map(l => (
                 <option key={l.id} value={l.id}>
-                  {l.cognome} {l.nome}
+                  {l.nome} {l.cognome}
                 </option>
               ))}
             </select>
@@ -654,20 +605,14 @@ const checkDimissioni = (lavoratoreId, date) => {
                     const isSelected = selectedDays.has(dateStr);
                     const suggestedCantiere = getCantiereFromUnilav(selectedWorker, day);
                     const hasUnilavAssignment = !!suggestedCantiere;
-                    const dataDimissioni = checkDimissioni(selectedWorker, day);
-                    const isDimesso = !!dataDimissioni;
-                    
-                    // ✅ Mostra warning se ci sono ore permesso
-                    const hasPermesso = presenza?.ore_permesso && parseFloat(presenza.ore_permesso) > 0;
                     
                     return (
                       <div 
                         key={index}
-                        className={`border-2 rounded-lg p-3 ${isDimesso ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} transition-all ${
-  isDimesso ? 'bg-gray-200 border-gray-400' :
-  isSelected ? 'ring-4 ring-blue-400' :
+                        className={`border-2 rounded-lg p-3 cursor-pointer transition-all ${
+                          isSelected ? 'ring-4 ring-blue-400' :
                           presenza ? (
-                            hasPermesso 
+                            presenza.tipo === 'lavoro' && parseFloat(presenza.ore || 0) < 8 
                               ? 'bg-orange-100 border-orange-400'
                               : tipoInfo.color
                           ) : 
@@ -675,7 +620,7 @@ const checkDimissioni = (lavoratoreId, date) => {
                           hasUnilavAssignment ? 'bg-emerald-100 border-emerald-400' :
                           'bg-white border-gray-200'
                         } ${selectionMode ? 'hover:ring-2 hover:ring-blue-300' : 'hover:shadow-md'}`}
-                        onClick={() => !isDimesso && openModal(day)}
+                        onClick={() => openModal(day)}
                       >
                         <div className="flex justify-between items-start mb-2">
                           <div className="font-semibold text-gray-800 text-sm">
@@ -699,12 +644,11 @@ const checkDimissioni = (lavoratoreId, date) => {
                             {presenza.ore && (
                               <div className="text-gray-600">
                                 {presenza.ore} ore{presenza.tipo === 'lavoro' ? ' lavorate' : ''}
-                              </div>
-                            )}
-                            {/* ✅ MOSTRA ORE PERMESSO DAL DATABASE */}
-                            {hasPermesso && (
-                              <div className="text-orange-600 font-semibold text-xs">
-                                ⏰ {presenza.ore_permesso}h permesso
+                                {presenza.tipo === 'lavoro' && parseFloat(presenza.ore || 0) < 8 && (
+                                  <span className="text-orange-600 font-semibold ml-1">
+                                    (-{(8 - parseFloat(presenza.ore || 0)).toFixed(1)}h)
+                                  </span>
+                                )}
                               </div>
                             )}
                             {presenza.ore_pioggia && parseFloat(presenza.ore_pioggia) > 0 && (
@@ -770,7 +714,7 @@ const checkDimissioni = (lavoratoreId, date) => {
           <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
             <div className="text-sm text-orange-700 mb-1">Ore Permesso</div>
             <div className="text-2xl font-bold text-orange-900">{riepilogo.orePermesso.toFixed(1)} h</div>
-            <div className="text-xs text-orange-600 mt-1">inserite manualmente</div>
+            <div className="text-xs text-orange-600 mt-1">ore &lt; 8</div>
           </div>
         </div>
 
@@ -803,8 +747,7 @@ const checkDimissioni = (lavoratoreId, date) => {
         <p className="text-xs text-gray-500 mt-2">💡 La nota viene salvata automaticamente quando esci dal campo</p>
       </div>
 
-
-   {/* Pulsante Esporta PDF */}
+      {/* Pulsante Esporta PDF */}
       <div className="bg-white rounded-lg shadow p-4">
         <button 
           onClick={() => {
@@ -997,12 +940,10 @@ const checkDimissioni = (lavoratoreId, date) => {
         </button>
       </div>
 
-
-
-      {/* Modal singola presenza - CON CAMPO ORE PERMESSO */}
+      {/* Modal singola presenza */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
             <h3 className="text-xl font-semibold mb-4">
               {selectedDate && formatDateShort(selectedDate)}
             </h3>
@@ -1020,7 +961,6 @@ const checkDimissioni = (lavoratoreId, date) => {
                   ))}
                 </select>
               </div>
-              
               {(formData.tipo === 'lavoro' || formData.tipo === 'pioggia') && (
                 <div>
                   <label className="block text-sm font-medium mb-2">
@@ -1037,28 +977,8 @@ const checkDimissioni = (lavoratoreId, date) => {
                   />
                 </div>
               )}
-              
-              {/* ✅ CAMPO ORE PERMESSO */}
               {formData.tipo === 'lavoro' && (
                 <>
-                  <div className="bg-orange-50 p-3 rounded-lg border border-orange-200">
-                    <label className="block text-sm font-medium mb-2 text-orange-800">
-                      ⏰ Ore Permesso
-                    </label>
-                    <input 
-                      type="number" 
-                      step="0.5" 
-                      value={formData.orePermesso || ''} 
-                      onChange={(e) => setFormData({ ...formData, orePermesso: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-lg" 
-                      placeholder="0"
-                      disabled={saving}
-                    />
-                    <p className="text-xs text-orange-600 mt-1">
-                      Inserisci le ore di permesso prese (es: 2 = 2 ore di permesso)
-                    </p>
-                  </div>
-
                   <div>
                     <label className="block text-sm font-medium mb-2">Ore Pioggia</label>
                     <input 
@@ -1071,7 +991,6 @@ const checkDimissioni = (lavoratoreId, date) => {
                       disabled={saving}
                     />
                   </div>
-                  
                   <div>
                     <label className="block text-sm font-medium mb-2">Cantiere</label>
                     <select 
@@ -1088,7 +1007,6 @@ const checkDimissioni = (lavoratoreId, date) => {
                   </div>
                 </>
               )}
-              
               <div>
                 <label className="block text-sm font-medium mb-2">Note</label>
                 <textarea 
@@ -1121,10 +1039,10 @@ const checkDimissioni = (lavoratoreId, date) => {
         </div>
       )}
 
-      {/* Modal inserimento multiplo - CON CAMPO ORE PERMESSO */}
+      {/* Modal inserimento multiplo */}
       {showBulkModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
             <h3 className="text-xl font-semibold mb-4">
               Inserimento per {selectedDays.size} giorni
             </h3>
@@ -1142,7 +1060,6 @@ const checkDimissioni = (lavoratoreId, date) => {
                   ))}
                 </select>
               </div>
-              
               {(bulkFormData.tipo === 'lavoro' || bulkFormData.tipo === 'pioggia') && (
                 <>
                   <div>
@@ -1156,43 +1073,21 @@ const checkDimissioni = (lavoratoreId, date) => {
                       disabled={saving}
                     />
                   </div>
-                  
-                  {/* ✅ CAMPO ORE PERMESSO PER BULK */}
                   {bulkFormData.tipo === 'lavoro' && (
-                    <>
-                      <div className="bg-orange-50 p-3 rounded-lg border border-orange-200">
-                        <label className="block text-sm font-medium mb-2 text-orange-800">
-                          ⏰ Ore Permesso
-                        </label>
-                        <input 
-                          type="number" 
-                          step="0.5" 
-                          value={bulkFormData.orePermesso || ''} 
-                          onChange={(e) => setBulkFormData({ ...bulkFormData, orePermesso: e.target.value })}
-                          className="w-full px-3 py-2 border rounded-lg" 
-                          placeholder="0"
-                          disabled={saving}
-                        />
-                        <p className="text-xs text-orange-600 mt-1">
-                          Applicato a tutti i giorni selezionati
-                        </p>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Cantiere</label>
-                        <select 
-                          value={bulkFormData.cantiere} 
-                          onChange={(e) => setBulkFormData({ ...bulkFormData, cantiere: e.target.value })}
-                          className="w-full px-3 py-2 border rounded-lg"
-                          disabled={saving}
-                        >
-                          <option value="">Seleziona cantiere</option>
-                          {cantieri.map(c => (
-                            <option key={c.id} value={c.id}>{c.nome}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Cantiere</label>
+                      <select 
+                        value={bulkFormData.cantiere} 
+                        onChange={(e) => setBulkFormData({ ...bulkFormData, cantiere: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-lg"
+                        disabled={saving}
+                      >
+                        <option value="">Seleziona cantiere</option>
+                        {cantieri.map(c => (
+                          <option key={c.id} value={c.id}>{c.nome}</option>
+                        ))}
+                      </select>
+                    </div>
                   )}
                 </>
               )}

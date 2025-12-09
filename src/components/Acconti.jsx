@@ -256,7 +256,7 @@ function Acconti() {
             >
               <option value="">Tutti i lavoratori</option>
               {lavoratori.map(l => (
-                <option key={l.id} value={l.id}>{l.nome} {l.cognome}</option>
+                <option key={l.id} value={l.id}>{l.cognome} {l.nome}</option>
               ))}
             </select>
           </div>
@@ -350,7 +350,7 @@ function Acconti() {
                 disabled={saving}
               >
                 <option value="">Seleziona Lavoratore</option>
-                {lavoratori.map(l => <option key={l.id} value={l.id}>{l.nome} {l.cognome}</option>)}
+                {lavoratori.map(l => <option key={l.id} value={l.id}>{l.cognome} {l.nome}</option>)}
               </select>
             </div>
             
