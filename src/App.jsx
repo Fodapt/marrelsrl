@@ -129,7 +129,7 @@ function AccessDenied() {
 
 function App() {
   return (
-    <HashRouter>
+    <HashRouter basename='/marrelsrl'>
       <AuthProvider>
         <DataProvider>
           <AppContent />
