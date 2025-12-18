@@ -53,20 +53,28 @@ function PresenzeCantieri() {
   const anni = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 2 + i);
 // Funzione per controllare se il lavoratore ha dimissioni nel periodo
 const checkDimissioni = (lavoratoreId, date) => {
-  const univlavLav = unilav.filter(u => u.lavoratore_id === lavoratoreId);
-  const dimissioni = univlavLav.find(u => u.tipo_unilav === 'dimissioni');
+  const univlavLav = unilav.filter(u => u.lavoratore_id === lavoratoreId)
+    .sort((a, b) => new Date(b.data_inizio) - new Date(a.data_inizio)); // Ordina dal più recente
   
-  if (!dimissioni || !dimissioni.data_inizio) return null;
-  
-  // Normalizza la data delle dimissioni a mezzanotte
-  const [year, month, day] = dimissioni.data_inizio.split('T')[0].split('-').map(Number);
-  const dataDim = new Date(year, month - 1, day);
-  
-  // Normalizza la data da controllare a mezzanotte
   const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   
-  // ✅ Il lavoratore è dimesso dal giorno delle dimissioni in poi (escluso il giorno prima)
-  return targetDate >= dataDim ? dataDim : null;
+  // Trova l'unilav valido per questa data
+  for (const u of univlavLav) {
+    const dataInizio = new Date(u.data_inizio.split('T')[0]);
+    const dataFine = u.data_fine ? new Date(u.data_fine.split('T')[0]) : new Date(2099, 11, 31);
+    
+    // Se la data è nel range di questo unilav
+    if (targetDate >= dataInizio && targetDate <= dataFine) {
+      // Se è dimissioni, blocca
+      if (u.tipo_unilav === 'dimissioni') {
+        return { data_inizio: u.data_inizio };
+      }
+      // Se è assunzione o altro, il lavoratore è attivo
+      return null;
+    }
+  }
+  
+  return null;
 };
 
   const tipiPresenza = [
