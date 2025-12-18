@@ -308,11 +308,11 @@ const calcolaResiduo = (fattura) => {
             <div>
               <label className="block text-sm font-medium mb-1">Cliente *</label>
               <select 
-                className="border rounded px-3 py-2 w-full"
-                value={formData.clienteId || ''}
-                onChange={(e) => setFormData({...formData, clienteId: e.target.value})}
-                disabled={saving}
-              >
+  className="border rounded px-3 py-2 w-full"
+  value={formData.clienteId || ''}
+  onChange={(e) => setFormData({...formData, clienteId: e.target.value, fatturaRiferimento: null})}
+  disabled={saving}
+>
                 <option value="">Seleziona cliente</option>
                 {fornitori.map(f => (
                   <option key={f.id} value={f.id}>{f.ragione_sociale}</option>
@@ -342,8 +342,8 @@ const calcolaResiduo = (fattura) => {
     >
       <option value="">Seleziona fattura...</option>
       {fattureEmesse
-        .filter(f => f.tipo !== 'nota_credito' && f.cliente_id === formData.clienteId)
-        .map(f => (
+  .filter(f => (!f.tipo || f.tipo === 'fattura') && f.cliente_id === formData.clienteId)
+  .map(f => (
           <option key={f.id} value={f.id}>
             {f.numero_fattura} - {formatDate(f.data_fattura)} - € {calcolaTotale(f.imponibile, f.percentuale_iva).toFixed(2)}
           </option>
