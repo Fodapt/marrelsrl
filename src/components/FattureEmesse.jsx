@@ -19,7 +19,8 @@ function FattureEmesse() {
   const [showAccontiModal, setShowAccontiModal] = useState(false);
   const [fatturaSelezionata, setFatturaSelezionata] = useState(null);
   const [filtroCliente, setFiltroCliente] = useState('');
-  const [filtroCantiere, setFiltroCantiere] = useState('');
+const [filtroCantiere, setFiltroCantiere] = useState('');
+const [filtroTipo, setFiltroTipo] = useState('');
 
   // ✅ MOSTRA LOADING
   if (loading.fattureEmesse || loading.fornitori || loading.cantieri) {
@@ -65,16 +66,20 @@ const calcolaResiduo = (fattura) => {
 };
 
   const fattureFiltrate = useMemo(() => {
-    return fattureEmesse.filter(f => {
-      if (filtroCliente && f.cliente_id !== filtroCliente) return false;
-      if (filtroCantiere && f.cantiere_id !== filtroCantiere) return false;
-      return true;
-    }).sort((a, b) => {
+  return fattureEmesse.filter(f => {
+    if (filtroCliente && f.cliente_id !== filtroCliente) return false;
+    if (filtroCantiere && f.cantiere_id !== filtroCantiere) return false;
+    if (filtroTipo) {
+      const tipoFattura = f.tipo || 'fattura';
+      if (tipoFattura !== filtroTipo) return false;
+    }
+    return true;
+  }).sort((a, b) => {
       const numA = a.numero_fattura || '';
       const numB = b.numero_fattura || '';
       return numB.localeCompare(numA, undefined, { numeric: true, sensitivity: 'base' });
     });
-  }, [fattureEmesse, filtroCliente, filtroCantiere]);
+  }, [fattureEmesse, filtroCliente, filtroCantiere, filtroTipo]);
 
   const riepilogoCliente = useMemo(() => {
     if (!filtroCliente && !filtroCantiere) return null; 
@@ -215,24 +220,24 @@ const calcolaResiduo = (fattura) => {
   return (
     <div className="space-y-4">
       {/* Header con filtri */}
-      <div className="flex justify-between items-center">
-        <button 
-          onClick={() => {
-            setShowForm(true);
-            setEditingId(null);
-            setFormData({ percentualeIVA: 22, acconti: [] });
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }} 
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          ➕ Nuova Fattura
-        </button>
+      <div className="flex gap-2 items-center flex-wrap">
+  <button 
+    onClick={() => {
+      setShowForm(true);
+      setEditingId(null);
+      setFormData({ tipo: 'fattura', percentualeIVA: 22, acconti: [] });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }} 
+    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 whitespace-nowrap"
+  >
+    ➕ Nuova Fattura
+  </button>
 
-        <select 
-          className="border rounded px-3 py-2"
-          value={filtroCliente}
-          onChange={(e) => setFiltroCliente(e.target.value)}
-        >
+  <select 
+    className="border rounded px-3 py-2 flex-1 min-w-[200px]"
+    value={filtroCliente}
+    onChange={(e) => setFiltroCliente(e.target.value)}
+  >
           <option value="">Tutti i clienti</option>
           {fornitori.map(f => (
             <option key={f.id} value={f.id}>{f.ragione_sociale}</option>
@@ -240,7 +245,7 @@ const calcolaResiduo = (fattura) => {
         </select>
 
         <select 
-  className="border rounded px-3 py-2"
+  className="border rounded px-3 py-2 flex-1 min-w-[200px]"
   value={filtroCantiere}
   onChange={(e) => setFiltroCantiere(e.target.value)}
 >
@@ -248,6 +253,15 @@ const calcolaResiduo = (fattura) => {
   {cantieri.map(c => (
     <option key={c.id} value={c.id}>{c.nome}</option>
   ))}
+</select>
+<select 
+  className="border rounded px-3 py-2 flex-1 min-w-[200px]"
+  value={filtroTipo}
+  onChange={(e) => setFiltroTipo(e.target.value)}
+>
+  <option value="">Tutti i documenti</option>
+  <option value="fattura">Solo Fatture</option>
+  <option value="nota_credito">Solo Note di Credito</option>
 </select>
       </div>
 
