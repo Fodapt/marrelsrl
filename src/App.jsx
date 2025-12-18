@@ -33,7 +33,7 @@ import SituazioneFornitori from './components/SituazioneFornitori';
 function AppContent() {
   const { user, profile, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [openDropdown, setOpenDropdown] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   
   const [notePresenze, setNotePresenze] = useState([]);
   const [noteRateizzi, setNoteRateizzi] = useState([]);
@@ -73,21 +73,19 @@ function AppContent() {
       <Route path="/dashboard" element={
         !user || !profile ? <Navigate to="/" replace /> : (
           <div className="min-h-screen bg-gray-50">
-            <Header 
-              esportaDati={() => alert('Funzione temporaneamente disabilitata')} 
-              importaDati={() => {}}
-              profile={profile}
-            />
-            
-            <Navigation 
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              openDropdown={openDropdown}
-              setOpenDropdown={setOpenDropdown}
-              profile={profile}
-            />
+  <Header 
+    sidebarOpen={sidebarOpen}
+    setSidebarOpen={setSidebarOpen}
+  />
+  
+  <Navigation 
+    activeTab={activeTab}
+    setActiveTab={setActiveTab}
+    sidebarOpen={sidebarOpen}
+    setSidebarOpen={setSidebarOpen}
+  />
 
-            <main className="max-w-7xl mx-auto px-4 py-6">
+  <main className="md:ml-64 px-4 py-6 pt-20 md:pt-6">
               {activeTab === 'dashboard' && <Dashboard {...commonProps} />}
               {activeTab === 'lavoratori' && <Lavoratori {...commonProps} />}
               {activeTab === 'unilav' && <Unilav {...commonProps} />}
