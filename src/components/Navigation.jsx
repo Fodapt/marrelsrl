@@ -32,15 +32,17 @@ function Navigation({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
       ]),
     },
 
-    {
-      id: "cantieri-commesse",
-      label: "Cantieri & Commesse",
-      icon: "🏗️",
-      type: "group",
+    
+      {
+  id: "cantieri-commesse",
+  label: "Cantieri ecc...",
+  icon: "🏗️",
+  type: "group",
       subtabs: [
         { id: "cantieri", label: "Cantieri", icon: "🏗️" },
         { id: "sal", label: "SAL", icon: "💰" },
         { id: "subappaltatori", label: "Subappaltatori", icon: "🏢" },
+        { id: "economico-cantiere", label: "Economico Cantiere", icon: "📊" },
       ],
     },
 
@@ -51,16 +53,16 @@ function Navigation({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
       type: "group",
       subtabs: [
         { id: "fornitori", label: "Fornitori", icon: "🏪" },
-        { id: "situazione-fornitori", label: "Ordini & Situazione", icon: "📦" },
+        { id: "situazione-fornitori", label: "Situazione Fornitori", icon: "📦" },
         { id: "dtt-formulari", label: "DTT/Formulari", icon: "📋" },
       ],
     },
 
     {
       id: "clienti-fatturazione",
-      label: "Clienti & Fatturazione",
-      icon: "👔",
-      type: "group",
+  label: "Clienti & Fatt.",
+  icon: "👔",
+  type: "group",
       subtabs: filterSubtabsByRole([
         { id: "clienti", label: "Clienti", icon: "👔" },
         { id: "fatture-emesse", label: "Fatture Emesse", icon: "🧾" },
@@ -75,18 +77,12 @@ function Navigation({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
       subtabs: filterSubtabsByRole([
         { id: "contabilita", label: "Prima Nota", icon: "🏦" },
         { id: "casse", label: "Cassa Edile", icon: "💶" },
-        { id: "rateizzi", label: "Rateizzi INPS", icon: "💳" },
+        { id: "rateizzi", label: "Rateizzi", icon: "💳" },
       ]),
     },
 
-    {
-      id: "mezzi",
-      label: "Mezzi",
-      icon: "🚛",
-      type: "group",
-      subtabs: [{ id: "automezzi", label: "Automezzi", icon: "🚛" }],
-    },
-
+    // 🚛 AUTOMEZZI (single, non più group)
+{ id: "automezzi", label: "Automezzi", icon: "🚛", type: "single" },
     { id: "certificazioni", label: "Certificazioni", icon: "📋", type: "single" },
     { id: "scadenzario", label: "Scadenzario", icon: "📅", type: "single" },
   ];
@@ -139,7 +135,7 @@ function Navigation({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
                 {tab.label}
               </button>
             ) : (
-              <div key={tab.id} className="mb-1">
+              <div key={tab.id} className="mb-3">
                 <button
                   onClick={() => toggleGroup(tab.id)}
                   className={`w-full flex justify-between items-center px-4 py-3 rounded-lg transition ${
@@ -162,32 +158,34 @@ function Navigation({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
                 </button>
 
                 {openGroups.includes(tab.id) && (
-                  <div className="ml-4 mt-1 space-y-1">
-                    {tab.subtabs.map((sub) => (
-                      <button
-                        key={sub.id}
-                        onClick={() => handleTabClick(sub.id)}
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition ${
-                          activeTab === sub.id
-                            ? "bg-blue-600 text-white"
-                            : "text-gray-600 hover:bg-gray-100"
-                        }`}
-                      >
-                        {sub.icon} {sub.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
+  <div className="ml-6 mt-2 space-y-1 border-l-2 border-gray-200 pl-3">
+    {tab.subtabs.map((sub) => (
+      <button
+        key={sub.id}
+        onClick={() => handleTabClick(sub.id)}
+        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${
+          activeTab === sub.id
+            ? "bg-blue-600 text-white font-medium shadow-sm"
+            : "text-gray-600 hover:bg-blue-50 hover:translate-x-1"
+        }`}
+      >
+        <span className="text-base">{sub.icon}</span>
+        <span>{sub.label}</span>
+      </button>
+    ))}
+  </div>
+)}
               </div>
             )
           )}
         </nav>
 
-        {/* Footer */}
-        <div className="p-4 border-t text-xs text-gray-500 text-center">
-          v4.0 • {profile?.azienda}
-        </div>
-      </aside>
+      {/* Versione in basso */}
+      <div className="mt-auto p-4 border-t border-gray-200 bg-gray-50">
+        <p className="text-xs text-gray-500 text-center">versione 4.0</p>
+        <p className="text-xs text-gray-400 text-center">{profile?.azienda}</p>
+      </div>
+    </aside>
     </>
   );
 }

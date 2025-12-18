@@ -28,6 +28,7 @@ import FattureEmesse from './components/FattureEmesse';
 import StoricoPaghe from './components/StoricoPaghe';
 import DttFormulari from './components/DttFormulari';
 import SituazioneFornitori from './components/SituazioneFornitori';
+import EconomicoCantiere from './components/EconomicoCantiere';
 
 // Componente principale con logica di autenticazione
 function AppContent() {
@@ -85,7 +86,7 @@ function AppContent() {
     setSidebarOpen={setSidebarOpen}
   />
 
-  <main className="md:ml-64 px-4 py-6 pt-20 md:pt-6">
+  <main className="md:ml-64 px-4 py-6 pt-20 md:pt-6 pb-16">
               {activeTab === 'dashboard' && <Dashboard {...commonProps} />}
               {activeTab === 'lavoratori' && <Lavoratori {...commonProps} />}
               {activeTab === 'unilav' && <Unilav {...commonProps} />}
@@ -107,6 +108,7 @@ function AppContent() {
               {activeTab === 'dtt-formulari' && <DttFormulari {...commonProps} />}
               {activeTab === 'situazione-fornitori' && <SituazioneFornitori {...commonProps} />}
               {activeTab === 'presenze' && <PresenzeCantieri {...commonProps} />}
+              {activeTab === 'economico-cantiere' && <EconomicoCantiere />}
             </main>
 
             <Footer />
