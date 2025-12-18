@@ -4,10 +4,11 @@ import { useData } from '../contexts/DataContext';
 function Contabilita() {
   // ✅ USA IL CONTEXT
   const { 
-    movimentiContabili, 
-    fornitori, 
-    cantieri, 
-    loading, 
+  movimentiContabili, 
+  fornitori, 
+  clienti, 
+  cantieri, 
+  loading,
     addRecord, 
     updateRecord, 
     deleteRecord,
@@ -143,10 +144,11 @@ const [commissioni, setCommissioni] = useState(() => {
     setSaving(true);
 
     const dataForSupabase = {
-      tipo: formData.tipo,
-      tipologia_movimento: formData.tipologiaMovimento || formData.tipologia_movimento,
-      fornitore_id: formData.fornitoreId || formData.fornitore_id,
-      cantiere_id: formData.cantiereId || formData.cantiere_id || null,
+  tipo: formData.tipo,
+  data_movimento: formData.dataMovimento,
+  fornitore_id: formData.fornitoreId || null,
+  cliente_id: formData.clienteId || null,
+  cantiere_id: formData.cantiereId || null,
       causale: formData.causale,
       importo: parseFloat(formData.importo || 0),
       commissione: parseFloat(formData.commissione || 0),
@@ -192,11 +194,11 @@ const [commissioni, setCommissioni] = useState(() => {
   };
 
   const handleEdit = (movimento) => {
-    setFormData({
-      tipo: movimento.tipo,
-      tipologiaMovimento: movimento.tipologia_movimento,
-      tipologia_movimento: movimento.tipologia_movimento,
-      fornitoreId: movimento.fornitore_id,
+  setFormData({
+    tipo: movimento.tipo,
+    dataMovimento: movimento.data_movimento,
+    fornitoreId: movimento.fornitore_id,
+    clienteId: movimento.cliente_id,
       fornitore_id: movimento.fornitore_id,
       cantiereId: movimento.cantiere_id,
       cantiere_id: movimento.cantiere_id,
@@ -471,6 +473,7 @@ const [commissioni, setCommissioni] = useState(() => {
     <tbody>
       ${movimentiMese.map(mov => {
         const fornitore = fornitori.find(f => f.id === mov.fornitore_id);
+        const cliente = clienti.find(c => c.id === movimento.cliente_id);
         const cantiere = cantieri.find(c => c.id === mov.cantiere_id);
         const tipologia = tipologieMovimento.find(t => t.value === mov.tipologia_movimento);
         const totale = parseFloat(mov.importo || 0) + parseFloat(mov.commissione || 0);
@@ -932,19 +935,32 @@ const [commissioni, setCommissioni] = useState(() => {
             )}
 
             <div>
-              <label className="block text-sm font-medium mb-1">Fornitore *</label>
-              <select 
-                className="border rounded px-3 py-2 w-full" 
-                value={formData.fornitoreId || ''}
-                onChange={(e) => setFormData({...formData, fornitoreId: e.target.value})}
-                disabled={saving}
-              >
-                <option value="">Seleziona fornitore</option>
-                {fornitori.map(f => (
-                  <option key={f.id} value={f.id}>{f.ragione_sociale}</option>
-                ))}
-              </select>
-            </div>
+  <label className="block text-sm font-medium mb-1">Fornitore/Cliente</label>
+  <div className="flex gap-2">
+    <select 
+      className="border rounded px-3 py-2 flex-1" 
+      value={formData.fornitoreId || ''}
+      onChange={(e) => setFormData({...formData, fornitoreId: e.target.value, clienteId: null})}
+      disabled={saving}
+    >
+      <option value="">Nessun fornitore</option>
+      {fornitori.map(f => (
+        <option key={f.id} value={f.id}>{f.ragione_sociale}</option>
+      ))}
+    </select>
+    <select 
+      className="border rounded px-3 py-2 flex-1" 
+      value={formData.clienteId || ''}
+      onChange={(e) => setFormData({...formData, clienteId: e.target.value, fornitoreId: null})}
+      disabled={saving}
+    >
+      <option value="">Nessun cliente</option>
+      {clienti.map(c => (
+        <option key={c.id} value={c.id}>{c.ragione_sociale}</option>
+      ))}
+    </select>
+  </div>
+</div>
 
             <div>
               <label className="block text-sm font-medium mb-1">Cantiere</label>
@@ -1175,7 +1191,7 @@ const [commissioni, setCommissioni] = useState(() => {
                     )}
                   </td>
                   <td className="px-3 py-2">{tipologia?.label || mov.tipologia_movimento}</td>
-                  <td className="px-3 py-2">{fornitore?.ragione_sociale || '-'}</td>
+                  <td className="px-3 py-2">{fornitore?.ragione_sociale || cliente?.ragione_sociale || '-'}</td>
                   <td className="px-3 py-2">{cantiere?.nome || '-'}</td>
                   <td className="px-3 py-2 max-w-xs">
                     {mov.causale}

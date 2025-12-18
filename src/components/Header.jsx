@@ -15,7 +15,7 @@ function Header({ esportaDati, importaDati }) {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">🏗️ Gestionale Marrel S.r.l.</h1>
-            <p className="text-blue-100 text-sm">v. 3.8</p>
+            <p className="text-blue-100 text-sm">v. 4.0</p>
           </div>
           
           <div className="flex items-center gap-4">
