@@ -3,9 +3,9 @@ import { useData } from '../contexts/DataContext';
 
 function FattureEmesse() {
   const {
-    fattureEmesse = [],
-    fornitori = [],
-    cantieri = [],
+  fattureEmesse = [],
+  clienti = [],
+  cantieri = [],
     loading,
     addRecord,
     updateRecord,
@@ -239,7 +239,7 @@ const calcolaResiduo = (fattura) => {
     onChange={(e) => setFiltroCliente(e.target.value)}
   >
           <option value="">Tutti i clienti</option>
-          {fornitori.map(f => (
+          {clienti.map(f => (
             <option key={f.id} value={f.id}>{f.ragione_sociale}</option>
           ))}
         </select>
@@ -328,7 +328,7 @@ const calcolaResiduo = (fattura) => {
   disabled={saving}
 >
                 <option value="">Seleziona cliente</option>
-                {fornitori.map(f => (
+                {clienti.map(f => (
                   <option key={f.id} value={f.id}>{f.ragione_sociale}</option>
                 ))}
               </select>
@@ -478,7 +478,7 @@ const calcolaResiduo = (fattura) => {
           </thead>
           <tbody>
             {fattureFiltrate.map(fattura => {
-              const cliente = fornitori.find(f => f.id === fattura.cliente_id);
+              const cliente = clienti.find(c => c.id === fattura.cliente_id);
               const cantiere = cantieri.find(c => c.id === fattura.cantiere_id);
               const totale = calcolaImportoEffettivo(fattura);
 const incassato = calcolaIncassato(fattura);

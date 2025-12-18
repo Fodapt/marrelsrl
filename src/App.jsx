@@ -15,6 +15,7 @@ import Automezzi from './components/Automezzi';
 import Subappaltatori from './components/Subappaltatori';
 import Cantieri from './components/Cantieri';
 import Fornitori from './components/Fornitori';
+import Clienti from './components/Clienti';
 import SAL from './components/SAL';
 import Certificazioni from './components/Certificazioni';
 import CasseEdili from './components/CasseEdili';
@@ -95,6 +96,7 @@ function AppContent() {
               {activeTab === 'subappaltatori' && <Subappaltatori {...commonProps} />}
               {activeTab === 'cantieri' && <Cantieri {...commonProps} />}
               {activeTab === 'fornitori' && <Fornitori {...commonProps} />}
+              {activeTab === 'clienti' && <Clienti {...commonProps} />}
               {activeTab === 'sal' && <SAL {...commonProps} />}
               {activeTab === 'certificazioni' && <Certificazioni {...commonProps} />}
               {activeTab === 'casse' && <CasseEdili {...commonProps} />}
