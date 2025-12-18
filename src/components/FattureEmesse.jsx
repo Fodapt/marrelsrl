@@ -61,8 +61,7 @@ const calcolaIncassato = (fattura) => {
 
 const calcolaResiduo = (fattura) => {
   const totale = calcolaImportoEffettivo(fattura);
-  const incassato = calcolaIncassato(fattura);
-  return fattura.tipo === 'nota_credito' ? totale + incassato : totale - incassato;
+  return totale - calcolaIncassato(fattura);
 };
 
   const fattureFiltrate = useMemo(() => {
@@ -125,10 +124,10 @@ const calcolaResiduo = (fattura) => {
   cantiere_id: formData.cantiereId || null,
   imponibile: parseFloat(formData.imponibile),
   percentuale_iva: parseFloat(formData.percentualeIVA || 22),
-  acconti: formData.acconti || [],
-  note: formData.note || null,
   tipo: formData.tipo || 'fattura',
-  fattura_riferimento: formData.fatturaRiferimento || null
+  fattura_riferimento: formData.fatturaRiferimento || null,
+  acconti: formData.acconti || [],
+  note: formData.note || null
 };
     let result;
     if (editingId) {
@@ -325,52 +324,62 @@ const calcolaResiduo = (fattura) => {
                 disabled={saving}
               />
             </div>
-            <div>
+
+
+
+    <div>
               <label className="block text-sm font-medium mb-1">Cliente *</label>
               <select 
-  className="border rounded px-3 py-2 w-full"
-  value={formData.clienteId || ''}
-  onChange={(e) => setFormData({...formData, clienteId: e.target.value, fatturaRiferimento: null})}
-  disabled={saving}
->
+                className="border rounded px-3 py-2 w-full"
+                value={formData.clienteId || ''}
+                onChange={(e) => setFormData({...formData, clienteId: e.target.value, fatturaRiferimento: null})}
+                disabled={saving}
+              >
                 <option value="">Seleziona cliente</option>
                 {clienti.map(f => (
                   <option key={f.id} value={f.id}>{f.ragione_sociale}</option>
                 ))}
               </select>
-              <div>
-  <label className="block text-sm font-medium mb-1">Tipo Documento *</label>
-  <select 
-    className="border rounded px-3 py-2 w-full"
-    value={formData.tipo || 'fattura'}
-    onChange={(e) => setFormData({...formData, tipo: e.target.value})}
-    disabled={saving}
-  >
-    <option value="fattura">Fattura</option>
-    <option value="nota_credito">Nota di Credito</option>
-  </select>
-</div>
+            </div>
 
-{formData.tipo === 'nota_credito' && (
-  <div className="col-span-2">
-    <label className="block text-sm font-medium mb-1">Fattura di Riferimento *</label>
-    <select 
-      className="border rounded px-3 py-2 w-full"
-      value={formData.fatturaRiferimento || ''}
-      onChange={(e) => setFormData({...formData, fatturaRiferimento: e.target.value})}
-      disabled={saving}
-    >
-      <option value="">Seleziona fattura...</option>
-      {fattureEmesse
-  .filter(f => (!f.tipo || f.tipo === 'fattura') && f.cliente_id === formData.clienteId)
-  .map(f => (
-          <option key={f.id} value={f.id}>
-            {f.numero_fattura} - {formatDate(f.data_fattura)} - € {calcolaTotale(f.imponibile, f.percentuale_iva).toFixed(2)}
-          </option>
-        ))}
-    </select>
-  </div>
-)}
+            <div>
+              <label className="block text-sm font-medium mb-1">Tipo Documento *</label>
+              <select 
+                className="border rounded px-3 py-2 w-full"
+                value={formData.tipo || 'fattura'}
+                onChange={(e) => setFormData({...formData, tipo: e.target.value})}
+                disabled={saving}
+              >
+                <option value="fattura">Fattura</option>
+                <option value="nota_credito">Nota di Credito</option>
+              </select>
+            </div>
+
+            {formData.tipo === 'nota_credito' && (
+              <div className="col-span-2">
+                <label className="block text-sm font-medium mb-1">Fattura di Riferimento *</label>
+                <select 
+                  className="border rounded px-3 py-2 w-full"
+                  value={formData.fatturaRiferimento || ''}
+                  onChange={(e) => setFormData({...formData, fatturaRiferimento: e.target.value})}
+                  disabled={saving}
+                >
+                  <option value="">Seleziona fattura...</option>
+                  {fattureEmesse
+                    .filter(f => (!f.tipo || f.tipo === 'fattura') && f.cliente_id === formData.clienteId)
+                    .map(f => (
+                      <option key={f.id} value={f.id}>
+                        {f.numero_fattura} - {formatDate(f.data_fattura)} - € {calcolaTotale(f.imponibile, f.percentuale_iva).toFixed(2)}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
+
+            <div>
+
+
+
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Cantiere</label>
@@ -408,6 +417,9 @@ const calcolaResiduo = (fattura) => {
                 disabled={saving}
               />
             </div>
+
+            
+
             <div className="col-span-2 bg-gray-50 p-4 rounded">
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
@@ -478,6 +490,7 @@ const calcolaResiduo = (fattura) => {
               <th className="px-3 py-2 text-right">IVA</th>
               <th className="px-3 py-2 text-right">Totale</th>
               <th className="px-3 py-2 text-right">Incassato</th>
+              <th className="px-3 py-2 text-left">Tipo</th>
               <th className="px-3 py-2 text-right">Residuo</th>
               <th className="px-3 py-2 text-center">Azioni</th>
             </tr>
@@ -508,6 +521,13 @@ const isNotaCredito = fattura.tipo === 'nota_credito';
 </td>
 <td className={`px-3 py-2 text-right ${isNotaCredito ? 'text-red-600' : 'text-green-600'}`}>
   € {incassato.toFixed(2)}
+</td>
+<td className="px-3 py-2">
+  {isNotaCredito ? (
+    <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded">Nota Credito</span>
+  ) : (
+    <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">Fattura</span>
+  )}
 </td>
 <td className={`px-3 py-2 text-right font-medium ${isNotaCredito ? 'text-red-600' : 'text-orange-600'}`}>
   € {residuo.toFixed(2)}
