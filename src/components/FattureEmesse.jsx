@@ -45,15 +45,20 @@ function FattureEmesse() {
   };
 
   const calcolaTotale = (imponibile, percentualeIVA) => {
-    return parseFloat(imponibile || 0) + calcolaIVA(imponibile, percentualeIVA);
-  };
+  return parseFloat(imponibile || 0) + calcolaIVA(imponibile, percentualeIVA);
+};
 
-  const calcolaIncassato = (fattura) => {
-    if (!fattura.acconti || fattura.acconti.length === 0) return 0;
-    return fattura.acconti.reduce((sum, acc) => sum + parseFloat(acc.importo || 0), 0);
-  };
+const calcolaImportoEffettivo = (fattura) => {
+  const totale = calcolaTotale(fattura.imponibile, fattura.percentuale_iva);
+  return fattura.tipo === 'nota_credito' ? -totale : totale;
+};
 
-  const calcolaResiduo = (fattura) => {
+const calcolaIncassato = (fattura) => {
+  if (!fattura.acconti || fattura.acconti.length === 0) return 0;
+  return fattura.acconti.reduce((sum, acc) => sum + parseFloat(acc.importo || 0), 0);
+};
+
+const calcolaResiduo = (fattura) => {
   const totale = calcolaImportoEffettivo(fattura);
   const incassato = calcolaIncassato(fattura);
   return fattura.tipo === 'nota_credito' ? totale + incassato : totale - incassato;
