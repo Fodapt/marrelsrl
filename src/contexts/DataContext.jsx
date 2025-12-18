@@ -17,9 +17,10 @@ export const DataProvider = ({ children }) => {
   const { authLoading, profile, user } = useAuth();
 
   const [data, setData] = useState({
-    lavoratori: [],
-    cantieri: [],
-    fornitori: [],
+  lavoratori: [],
+  cantieri: [],
+  fornitori: [],
+  clienti: [],
     subappaltatori: [],
     veicoli: [],
     unilav: [],
@@ -63,9 +64,10 @@ export const DataProvider = ({ children }) => {
   };
 
   const tableMapping = {
-    lavoratori: 'lavoratori',
-    cantieri: 'cantieri',
-    fornitori: 'fornitori',
+  lavoratori: 'lavoratori',
+  cantieri: 'cantieri',
+  fornitori: 'fornitori',
+  clienti: 'clienti',
     subappaltatori: 'subappaltatori',
     veicoli: 'veicoli',
     unilav: 'unilav',
@@ -88,7 +90,7 @@ export const DataProvider = ({ children }) => {
     documenti: 'documenti'
   };
 
-  const criticalTables = ['lavoratori', 'cantieri', 'fornitori'];
+  const criticalTables = ['lavoratori', 'cantieri', 'fornitori', 'clienti'];
   const secondaryTables = Object.keys(tableMapping).filter(k => !criticalTables.includes(k));
 
   // ---------------------------
