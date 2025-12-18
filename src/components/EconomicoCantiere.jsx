@@ -7,7 +7,6 @@ function EconomicoCantiere() {
     fattureEmesse = [],
     movimentiContabili = [],
     storicoPaghe = [],
-    presenze = [],
     cassaEdileLavoratori = [],
     loading
   } = useData();
@@ -18,10 +17,13 @@ function EconomicoCantiere() {
   const economico = useMemo(() => {
     if (!cantiereSelezionato) return null;
 
-    // RICAVI - Fatture Emesse
+    // ========== RICAVI - Fatture Emesse ==========
     const fatture = fattureEmesse.filter(f => f.cantiere_id === cantiereSelezionato);
+    
     const totaleRicavi = fatture.reduce((sum, f) => {
-      const totale = parseFloat(f.imponibile || 0) * (1 + parseFloat(f.percentuale_iva || 22) / 100);
+      const imponibile = parseFloat(f.imponibile || 0);
+      const iva = parseFloat(f.percentuale_iva || 22);
+      const totale = imponibile * (1 + iva / 100);
       return sum + totale;
     }, 0);
 
@@ -32,48 +34,20 @@ function EconomicoCantiere() {
 
     const daIncassare = totaleRicavi - totaleIncassato;
 
-    // COSTI - Fornitori (da Contabilità)
+    // ========== COSTI - Fornitori (da Contabilità) ==========
     const costiFornitori = movimentiContabili
       .filter(m => m.cantiere_id === cantiereSelezionato && m.tipo === 'uscita')
-      .reduce((sum, m) => sum + parseFloat(m.importo || 0) + parseFloat(m.commissione || 0), 0);
+      .reduce((sum, m) => {
+        const importo = parseFloat(m.importo || 0);
+        const commissione = parseFloat(m.commissione || 0);
+        return sum + importo + commissione;
+      }, 0);
 
-    // COSTI - Manodopera (calcolo proporzionale da presenze)
-    const presenzeCantiereMap = {};
-    presenze.forEach(p => {
-      if (p.cantiere_id === cantiereSelezionato && p.tipo === 'lavoro') {
-        const lavoratoreId = p.lavoratore_id;
-        const ore = parseFloat(p.ore || 0);
-        presenzeCantiereMap[lavoratoreId] = (presenzeCantiereMap[lavoratoreId] || 0) + ore;
-      }
-    });
+    // ========== COSTI - Manodopera (da Storico Paghe per cantiere) ==========
+    const pagheCantiere = storicoPaghe.filter(p => p.cantiere_id === cantiereSelezionato);
+    const costiManodopera = pagheCantiere.reduce((sum, p) => sum + parseFloat(p.importo || 0), 0);
 
-    let costiManodopera = 0;
-    Object.entries(presenzeCantiereMap).forEach(([lavoratoreId, oreCantiere]) => {
-      // Trova tutte le paghe del lavoratore
-      const paghe = storicoPaghe.filter(p => p.lavoratore_id === lavoratoreId);
-      
-      paghe.forEach(paga => {
-        // Calcola ore totali del lavoratore nel mese della paga
-        const mese = paga.mese;
-        const anno = paga.anno;
-        const oreMese = presenze
-          .filter(p => {
-            const data = new Date(p.data);
-            return p.lavoratore_id === lavoratoreId && 
-                   data.getMonth() + 1 === mese && 
-                   data.getFullYear() === anno &&
-                   p.tipo === 'lavoro';
-          })
-          .reduce((sum, p) => sum + parseFloat(p.ore || 0), 0);
-
-        if (oreMese > 0) {
-          const costoOrario = parseFloat(paga.importo || 0) / oreMese;
-          costiManodopera += costoOrario * oreCantiere;
-        }
-      });
-    });
-
-    // COSTI - Cassa Edile
+    // ========== COSTI - Cassa Edile ==========
     const costiCassa = cassaEdileLavoratori
       .filter(c => c.cantiere_id === cantiereSelezionato)
       .reduce((sum, c) => {
@@ -87,9 +61,13 @@ function EconomicoCantiere() {
           parseFloat(c.ape || 0);
       }, 0);
 
+    // ========== TOTALI ==========
     const totaleCosti = costiFornitori + costiManodopera + costiCassa;
     const margine = totaleRicavi - totaleCosti;
     const marginePerc = totaleRicavi > 0 ? (margine / totaleRicavi) * 100 : 0;
+
+    // Conta lavoratori unici
+    const lavoratoriUnici = new Set(pagheCantiere.map(p => p.lavoratore_id)).size;
 
     return {
       totaleRicavi,
@@ -101,9 +79,11 @@ function EconomicoCantiere() {
       totaleCosti,
       margine,
       marginePerc,
-      numeroFatture: fatture.length
+      numeroFatture: fatture.length,
+      numeroLavoratori: lavoratoriUnici,
+      numeroPaghe: pagheCantiere.length
     };
-  }, [cantiereSelezionato, fattureEmesse, movimentiContabili, storicoPaghe, presenze, cassaEdileLavoratori]);
+  }, [cantiereSelezionato, fattureEmesse, movimentiContabili, storicoPaghe, cassaEdileLavoratori]);
 
   if (loading.cantieri) {
     return (
@@ -124,7 +104,7 @@ function EconomicoCantiere() {
         <div className="mb-6">
           <label className="block text-sm font-medium mb-2">Seleziona Cantiere</label>
           <select
-            className="w-full px-4 py-2 border rounded-lg"
+            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             value={cantiereSelezionato}
             onChange={(e) => setCantiereSelezionato(e.target.value)}
           >
@@ -138,44 +118,68 @@ function EconomicoCantiere() {
         {economico && (
           <>
             {/* RICAVI */}
-            <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-4">
-              <h3 className="text-lg font-semibold text-green-800 mb-4">💰 RICAVI</h3>
-              <div className="grid grid-cols-3 gap-4">
+            <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6 mb-4">
+              <h3 className="text-lg font-semibold text-green-800 mb-4 flex items-center gap-2">
+                <span className="text-2xl">💰</span> RICAVI
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <div className="text-sm text-green-700">Fatturato Totale</div>
-                  <div className="text-2xl font-bold text-green-900">€ {economico.totaleRicavi.toFixed(2)}</div>
-                  <div className="text-xs text-green-600">{economico.numeroFatture} fatture</div>
+                  <div className="text-sm text-green-700 mb-1">Fatturato Totale</div>
+                  <div className="text-3xl font-bold text-green-900">
+                    € {economico.totaleRicavi.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  <div className="text-xs text-green-600 mt-1">{economico.numeroFatture} fatture</div>
                 </div>
                 <div>
-                  <div className="text-sm text-green-700">Incassato</div>
-                  <div className="text-2xl font-bold text-green-900">€ {economico.totaleIncassato.toFixed(2)}</div>
+                  <div className="text-sm text-green-700 mb-1">Incassato</div>
+                  <div className="text-3xl font-bold text-green-900">
+                    € {economico.totaleIncassato.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
                 </div>
                 <div>
-                  <div className="text-sm text-orange-700">Da Incassare</div>
-                  <div className="text-2xl font-bold text-orange-900">€ {economico.daIncassare.toFixed(2)}</div>
+                  <div className="text-sm text-orange-700 mb-1">Da Incassare</div>
+                  <div className="text-3xl font-bold text-orange-900">
+                    € {economico.daIncassare.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* COSTI */}
-            <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-4">
-              <h3 className="text-lg font-semibold text-red-800 mb-4">💸 COSTI</h3>
+            <div className="bg-red-50 border-2 border-red-200 rounded-lg p-6 mb-4">
+              <h3 className="text-lg font-semibold text-red-800 mb-4 flex items-center gap-2">
+                <span className="text-2xl">💸</span> COSTI
+              </h3>
               <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-red-700">Fornitori (da Contabilità)</span>
-                  <span className="text-xl font-bold text-red-900">€ {economico.costiFornitori.toFixed(2)}</span>
+                <div className="flex justify-between items-center p-3 bg-white rounded">
+                  <div>
+                    <span className="text-red-700 font-medium">Fornitori</span>
+                    <span className="text-xs text-gray-500 ml-2">(da Contabilità)</span>
+                  </div>
+                  <span className="text-xl font-bold text-red-900">
+                    € {economico.costiFornitori.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-red-700">Manodopera (da Storico Paghe)</span>
-                  <span className="text-xl font-bold text-red-900">€ {economico.costiManodopera.toFixed(2)}</span>
+                <div className="flex justify-between items-center p-3 bg-white rounded">
+                  <div>
+                    <span className="text-red-700 font-medium">Manodopera</span>
+                    <span className="text-xs text-gray-500 ml-2">({economico.numeroLavoratori} lavoratori, {economico.numeroPaghe} paghe)</span>
+                  </div>
+                  <span className="text-xl font-bold text-red-900">
+                    € {economico.costiManodopera.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-red-700">Cassa Edile</span>
-                  <span className="text-xl font-bold text-red-900">€ {economico.costiCassa.toFixed(2)}</span>
+                <div className="flex justify-between items-center p-3 bg-white rounded">
+                  <span className="text-red-700 font-medium">Cassa Edile</span>
+                  <span className="text-xl font-bold text-red-900">
+                    € {economico.costiCassa.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
                 </div>
                 <div className="border-t-2 border-red-300 pt-3 flex justify-between items-center">
-                  <span className="text-red-800 font-semibold">TOTALE COSTI</span>
-                  <span className="text-2xl font-bold text-red-900">€ {economico.totaleCosti.toFixed(2)}</span>
+                  <span className="text-red-800 font-semibold text-lg">TOTALE COSTI</span>
+                  <span className="text-2xl font-bold text-red-900">
+                    € {economico.totaleCosti.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
                 </div>
               </div>
             </div>
@@ -184,23 +188,23 @@ function EconomicoCantiere() {
             <div className={`border-2 rounded-lg p-6 ${
               economico.margine >= 0 ? 'bg-blue-50 border-blue-200' : 'bg-red-50 border-red-300'
             }`}>
-              <h3 className={`text-lg font-semibold mb-4 ${
+              <h3 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${
                 economico.margine >= 0 ? 'text-blue-800' : 'text-red-800'
               }`}>
-                📈 MARGINE
+                <span className="text-2xl">📈</span> MARGINE
               </h3>
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <div className="text-sm text-gray-700">Margine €</div>
-                  <div className={`text-4xl font-bold ${
+                  <div className="text-sm text-gray-700 mb-1">Margine €</div>
+                  <div className={`text-5xl font-bold ${
                     economico.margine >= 0 ? 'text-blue-900' : 'text-red-900'
                   }`}>
-                    € {economico.margine.toFixed(2)}
+                    € {economico.margine.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 </div>
                 <div>
-                  <div className="text-sm text-gray-700">Margine %</div>
-                  <div className={`text-4xl font-bold ${
+                  <div className="text-sm text-gray-700 mb-1">Margine %</div>
+                  <div className={`text-5xl font-bold ${
                     economico.margine >= 0 ? 'text-blue-900' : 'text-red-900'
                   }`}>
                     {economico.marginePerc.toFixed(1)}%
@@ -212,8 +216,17 @@ function EconomicoCantiere() {
         )}
 
         {!economico && cantiereSelezionato && (
-          <div className="text-center py-8 text-gray-500">
-            <p>Nessun dato disponibile per questo cantiere</p>
+          <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg">
+            <p className="text-4xl mb-4">📊</p>
+            <p className="text-lg">Nessun dato disponibile per questo cantiere</p>
+            <p className="text-sm mt-2">Assicurati di aver inserito fatture, movimenti contabili e paghe</p>
+          </div>
+        )}
+
+        {!cantiereSelezionato && (
+          <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-lg">
+            <p className="text-4xl mb-4">🏗️</p>
+            <p className="text-lg">Seleziona un cantiere per visualizzare l'analisi economica</p>
           </div>
         )}
       </div>

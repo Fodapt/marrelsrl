@@ -48,7 +48,7 @@ function Navigation({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
 
     {
       id: "fornitori-acquisti",
-      label: "Fornitori & Acquisti",
+      label: "Fornitori ecc...",
       icon: "🏪",
       type: "group",
       subtabs: [
