@@ -313,6 +313,39 @@ function FattureEmesse() {
                   <option key={f.id} value={f.id}>{f.ragione_sociale}</option>
                 ))}
               </select>
+              <div>
+  <label className="block text-sm font-medium mb-1">Tipo Documento *</label>
+  <select 
+    className="border rounded px-3 py-2 w-full"
+    value={formData.tipo || 'fattura'}
+    onChange={(e) => setFormData({...formData, tipo: e.target.value})}
+    disabled={saving}
+  >
+    <option value="fattura">Fattura</option>
+    <option value="nota_credito">Nota di Credito</option>
+  </select>
+</div>
+
+{formData.tipo === 'nota_credito' && (
+  <div className="col-span-2">
+    <label className="block text-sm font-medium mb-1">Fattura di Riferimento *</label>
+    <select 
+      className="border rounded px-3 py-2 w-full"
+      value={formData.fatturaRiferimento || ''}
+      onChange={(e) => setFormData({...formData, fatturaRiferimento: e.target.value})}
+      disabled={saving}
+    >
+      <option value="">Seleziona fattura...</option>
+      {fattureEmesse
+        .filter(f => f.tipo !== 'nota_credito' && f.cliente_id === formData.clienteId)
+        .map(f => (
+          <option key={f.id} value={f.id}>
+            {f.numero_fattura} - {formatDate(f.data_fattura)} - € {calcolaTotale(f.imponibile, f.percentuale_iva).toFixed(2)}
+          </option>
+        ))}
+    </select>
+  </div>
+)}
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Cantiere</label>
@@ -360,9 +393,9 @@ function FattureEmesse() {
                 </div>
                 <div>
                   <div className="text-sm text-gray-600">Totale</div>
-                  <div className="text-2xl font-bold text-blue-600">
-                    € {calcolaTotale(formData.imponibile, formData.percentualeIVA).toFixed(2)}
-                  </div>
+<div className={`text-2xl font-bold ${formData.tipo === 'nota_credito' ? 'text-red-600' : 'text-blue-600'}`}>
+  € {(formData.tipo === 'nota_credito' ? -1 : 1) * calcolaTotale(formData.imponibile, formData.percentualeIVA).toFixed(2)}
+</div>
                 </div>
                 <div>
                   <div className="text-sm text-gray-600">Residuo</div>
