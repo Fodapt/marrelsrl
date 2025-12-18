@@ -19,44 +19,92 @@ function Navigation({ activeTab, setActiveTab, openDropdown, setOpenDropdown }) 
   };
 
   const tabs = [
-    { id: "dashboard", label: "Dashboard", icon: "🏠", type: "single" },
-    {
-      id: "anagrafiche",
-      label: "Anagrafiche",
-      icon: "📁",
-      type: "group",
-      subtabs: [
-  { id: "lavoratori", label: "Lavoratori", icon: "👷" },
-  { id: "automezzi", label: "Automezzi", icon: "🚛" },
-  { id: "subappaltatori", label: "Subappaltatori", icon: "🏢" },
-  { id: "cantieri", label: "Cantieri", icon: "🏗️" },
-  { id: "fornitori", label: "Fornitori", icon: "🏪" },
-  { id: "clienti", label: "Clienti", icon: "👔" },
-],
-    },
-    {
-      id: "amministrazione",
-      label: "Amministrazione",
-      icon: "📊",
-      type: "group",
-      subtabs: filterSubtabsByRole([
-        { id: "unilav", label: "Unilav", icon: "📄" },
-        { id: "presenze", label: "Presenze", icon: "📅" },
-        { id: "casse", label: "Cassa Edile", icon: "💶" },
-        { id: "acconti", label: "Acconti", icon: "💵" },
-        { id: "fatture-emesse", label: "Fatture Emesse", icon: "🧾" },  // ⚠️ SOLO ADMIN
-        { id: "storico-paghe", label: "Storico Paghe", icon: "💼" },  // ⚠️ SOLO ADMIN
-        { id: "dtt-formulari", label: "DTT/Formulari", icon: "📋" },
-        { id: "situazione-fornitori", label: "Situazione Fornitori", icon: "📦" },
-        { id: "rateizzi", label: "Rateizzi", icon: "💳" },
-        { id: "sal", label: "SAL", icon: "💰" },
-        { id: 'contabilita', label: 'Contabilità', icon: '🏦' }  // ⚠️ SOLO ADMIN
-      ]),
-    },
-    { id: "corsi", label: "Corsi/Visite", icon: "🎓", type: "single" },
-    { id: "certificazioni", label: "Certificazioni", icon: "📋", type: "single" },
-    { id: "scadenzario", label: "Scadenzario", icon: "📅", type: "single" },
-  ];
+  { id: "dashboard", label: "Dashboard", icon: "🏠", type: "single" },
+  
+  // 👷 RISORSE UMANE
+  {
+    id: "risorse-umane",
+    label: "Risorse Umane",
+    icon: "👷",
+    type: "group",
+    subtabs: filterSubtabsByRole([
+      { id: "lavoratori", label: "Lavoratori", icon: "👤" },
+      { id: "unilav", label: "Unilav", icon: "📄" },
+      { id: "presenze", label: "Presenze Cantieri", icon: "📅" },
+      { id: "corsi", label: "Corsi & Visite", icon: "🎓" },
+      { id: "storico-paghe", label: "Storico Paghe", icon: "💼" },  // admin
+      { id: "acconti", label: "Acconti TFR & Paghe", icon: "💵" },
+    ]),
+  },
+  
+  // 🏗️ CANTIERI & COMMESSE
+  {
+    id: "cantieri-commesse",
+    label: "Cantieri & Commesse",
+    icon: "🏗️",
+    type: "group",
+    subtabs: [
+      { id: "cantieri", label: "Cantieri", icon: "🏗️" },
+      { id: "sal", label: "SAL", icon: "💰" },
+      { id: "subappaltatori", label: "Subappaltatori", icon: "🏢" },
+    ],
+  },
+  
+  // 🏪 FORNITORI & ACQUISTI
+  {
+    id: "fornitori-acquisti",
+    label: "Fornitori & Acquisti",
+    icon: "🏪",
+    type: "group",
+    subtabs: [
+      { id: "fornitori", label: "Fornitori", icon: "🏪" },
+      { id: "situazione-fornitori", label: "Ordini & Situazione", icon: "📦" },
+      { id: "dtt-formulari", label: "DTT/Formulari", icon: "📋" },
+    ],
+  },
+  
+  // 👔 CLIENTI & FATTURAZIONE
+  {
+    id: "clienti-fatturazione",
+    label: "Clienti & Fatturazione",
+    icon: "👔",
+    type: "group",
+    subtabs: filterSubtabsByRole([
+      { id: "clienti", label: "Clienti", icon: "👔" },
+      { id: "fatture-emesse", label: "Fatture Emesse", icon: "🧾" },  // admin
+    ]),
+  },
+  
+  // 🏦 CONTABILITÀ
+  {
+    id: "contabilita-menu",
+    label: "Contabilità",
+    icon: "🏦",
+    type: "group",
+    subtabs: filterSubtabsByRole([
+      { id: "contabilita", label: "Prima Nota", icon: "🏦" },  // admin
+      { id: "casse", label: "Cassa Edile", icon: "💶" },
+      { id: "rateizzi", label: "Rateizzi INPS", icon: "💳" },
+    ]),
+  },
+  
+  // 🚛 MEZZI
+  {
+    id: "mezzi",
+    label: "Mezzi",
+    icon: "🚛",
+    type: "group",
+    subtabs: [
+      { id: "automezzi", label: "Automezzi", icon: "🚛" },
+    ],
+  },
+  
+  // 📋 CERTIFICAZIONI AZIENDALI
+  { id: "certificazioni", label: "Certificazioni", icon: "📋", type: "single" },
+  
+  // 📅 SCADENZARIO
+  { id: "scadenzario", label: "Scadenzario", icon: "📅", type: "single" },
+];
 
   // Calcola posizione assoluta del dropdown rispetto allo schermo
   useEffect(() => {
