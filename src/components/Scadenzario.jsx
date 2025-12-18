@@ -152,27 +152,29 @@ const isAttivo = ultimoUnilavAttivo.tipo_unilav !== 'dimissioni' || new Date(ult
       }
     });
 
-    // RATEIZZI E RATE
-    rate.forEach(rata => {
-      if (rata.data_scadenza && rata.stato !== 'pagato') {
-        const scadenza = new Date(rata.data_scadenza);
-        const giorniMancanti = Math.ceil((scadenza - oggi) / (1000 * 60 * 60 * 24));
-        
-        if (giorniMancanti <= 30 && giorniMancanti >= -30) {
-          const rateizzo = rateizzi.find(r => r.id === rata.rateizzazione_id);
-          
-          scadenze.push({
-            tipo: 'rateizzo',
-            descrizione: rateizzo 
-              ? `Rata ${rata.numero_rata} - ${rateizzo.nome}`
-              : `Rata ${rata.numero_rata}`,
-            lavoratore: `€ ${parseFloat(rata.importo || 0).toFixed(2)}`,
-            scadenza: rata.data_scadenza,
-            giorniMancanti
-          });
-        }
+    // RATEIZZI - Scadenze rate (rate sono dentro rateizzi come JSONB)
+rateizzi.forEach(rateizzo => {
+  const rate = rateizzo.rate || [];
+  rate.forEach(rata => {
+    // Controlla che la rata non sia pagata
+    const isPagata = rata.dataPagamento && rata.dataPagamento !== '';
+    
+    if (!isPagata && rata.dataScadenza) {
+      const scadenza = new Date(rata.dataScadenza);
+      const giorniMancanti = Math.ceil((scadenza - oggi) / (1000 * 60 * 60 * 24));
+      
+      if (giorniMancanti <= 30 && giorniMancanti >= -30) {
+        scadenze.push({
+          tipo: 'rateizzo',
+          descrizione: `${rateizzo.nome} - Rata ${rata.numeroRata}`,
+          lavoratore: `Importo: € ${parseFloat(rata.importo || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          scadenza: rata.dataScadenza,
+          giorniMancanti
+        });
       }
-    });
+    }
+  });
+});
 
     return scadenze.sort((a, b) => a.giorniMancanti - b.giorniMancanti);
   }, [certificazioni, veicoli, cantieri, unilav, lavoratori, documenti, rateizzi, rate]);

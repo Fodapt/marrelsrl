@@ -268,7 +268,7 @@ const [commissioni, setCommissioni] = useState(() => {
     return movimentiContabili.filter(mov => {
       if (filtroDataDa && mov.data_movimento && mov.data_movimento < filtroDataDa) return false;
       if (filtroDataA && mov.data_movimento && mov.data_movimento > filtroDataA) return false;
-      if (filtroFornitore && mov.fornitore_id !== filtroFornitore) return false;
+      if (filtroFornitore && mov.fornitore_id !== filtroFornitore && mov.cliente_id !== filtroFornitore) return false;
       if (filtroCantiere && mov.cantiere_id !== filtroCantiere) return false;
       if (filtroTipologia && mov.tipologia_movimento !== filtroTipologia) return false;
       if (filtroStatoPagamento === 'pagato' && !mov.pagato) return false;
@@ -742,15 +742,22 @@ const [commissioni, setCommissioni] = useState(() => {
             onChange={(e) => setFiltroDataA(e.target.value)} 
           />
           <select 
-            className="border rounded px-3 py-2 text-sm"
-            value={filtroFornitore} 
-            onChange={(e) => setFiltroFornitore(e.target.value)}
-          >
-            <option value="">Tutti i fornitori</option>
-            {fornitori.map(f => (
-              <option key={f.id} value={f.id}>{f.ragione_sociale}</option>
-            ))}
-          </select>
+  className="border rounded px-3 py-2 text-sm"
+  value={filtroFornitore} 
+  onChange={(e) => setFiltroFornitore(e.target.value)}
+>
+  <option value="">Tutti fornitori/clienti</option>
+  <optgroup label="🏪 Fornitori">
+    {fornitori.map(f => (
+      <option key={f.id} value={f.id}>{f.ragione_sociale}</option>
+    ))}
+  </optgroup>
+  <optgroup label="👔 Clienti">
+    {clienti.map(c => (
+      <option key={c.id} value={c.id}>{c.ragione_sociale}</option>
+    ))}
+  </optgroup>
+</select>
           <select 
             className="border rounded px-3 py-2 text-sm"
             value={filtroCantiere} 
@@ -935,33 +942,36 @@ const [commissioni, setCommissioni] = useState(() => {
               </div>
             )}
 
-            <div>
-  <label className="block text-sm font-medium mb-1">Fornitore/Cliente</label>
-  <div className="flex gap-2">
+            {formData.tipo !== 'storno' && (
+  <div>
+    <label className="block text-sm font-medium mb-1">
+      {formData.tipo === 'entrata' ? 'Cliente' : 'Fornitore'}
+    </label>
     <select 
-      className="border rounded px-3 py-2 flex-1" 
-      value={formData.fornitoreId || ''}
-      onChange={(e) => setFormData({...formData, fornitoreId: e.target.value, clienteId: null})}
+      className="border rounded px-3 py-2 w-full" 
+      value={formData.tipo === 'entrata' ? (formData.clienteId || '') : (formData.fornitoreId || '')}
+      onChange={(e) => {
+        if (formData.tipo === 'entrata') {
+          setFormData({...formData, clienteId: e.target.value, fornitoreId: null});
+        } else {
+          setFormData({...formData, fornitoreId: e.target.value, clienteId: null});
+        }
+      }}
       disabled={saving}
     >
-      <option value="">Nessun fornitore</option>
-      {fornitori.map(f => (
-        <option key={f.id} value={f.id}>{f.ragione_sociale}</option>
-      ))}
-    </select>
-    <select 
-      className="border rounded px-3 py-2 flex-1" 
-      value={formData.clienteId || ''}
-      onChange={(e) => setFormData({...formData, clienteId: e.target.value, fornitoreId: null})}
-      disabled={saving}
-    >
-      <option value="">Nessun cliente</option>
-      {clienti.map(c => (
-        <option key={c.id} value={c.id}>{c.ragione_sociale}</option>
-      ))}
+      <option value="">Seleziona {formData.tipo === 'entrata' ? 'cliente' : 'fornitore'}</option>
+      {formData.tipo === 'entrata' ? (
+        clienti.map(c => (
+          <option key={c.id} value={c.id}>{c.ragione_sociale}</option>
+        ))
+      ) : (
+        fornitori.map(f => (
+          <option key={f.id} value={f.id}>{f.ragione_sociale}</option>
+        ))
+      )}
     </select>
   </div>
-</div>
+)}
 
             <div>
               <label className="block text-sm font-medium mb-1">Cantiere</label>
