@@ -51,15 +51,22 @@ function PresenzeCantieri() {
     'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
 
   const anni = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 2 + i);
-  // Funzione per controllare se il lavoratore ha dimissioni nel periodo
+// Funzione per controllare se il lavoratore ha dimissioni nel periodo
 const checkDimissioni = (lavoratoreId, date) => {
   const univlavLav = unilav.filter(u => u.lavoratore_id === lavoratoreId);
   const dimissioni = univlavLav.find(u => u.tipo_unilav === 'dimissioni');
   
   if (!dimissioni || !dimissioni.data_inizio) return null;
   
-  const dataDim = new Date(dimissioni.data_inizio);
-  return date >= dataDim ? dataDim : null;
+  // Normalizza la data delle dimissioni a mezzanotte
+  const [year, month, day] = dimissioni.data_inizio.split('T')[0].split('-').map(Number);
+  const dataDim = new Date(year, month - 1, day);
+  
+  // Normalizza la data da controllare a mezzanotte
+  const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  
+  // ✅ Il lavoratore è dimesso dal giorno delle dimissioni in poi (escluso il giorno prima)
+  return targetDate >= dataDim ? dataDim : null;
 };
 
   const tipiPresenza = [
@@ -475,8 +482,15 @@ const checkDimissioni = (lavoratoreId, date) => {
     };
     
     daysInMonth.forEach(day => {
-      const presenza = getPresenzaForDate(selectedWorker, day);
-      if (presenza) {
+  // ✅ Salta i giorni dopo le dimissioni
+  const isDimesso = checkDimissioni(selectedWorker, day);
+  if (isDimesso) return;
+  
+  // ✅ Salta i weekend
+  const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+  
+  const presenza = getPresenzaForDate(selectedWorker, day);
+  if (presenza) {
         const ore = parseFloat(presenza.ore) || 0;
         const orePioggia = parseFloat(presenza.ore_pioggia) || 0;
         const orePermesso = parseFloat(presenza.ore_permesso) || 0; // ✅ LEGGI dal DB
@@ -509,11 +523,14 @@ const checkDimissioni = (lavoratoreId, date) => {
             summary.giorniAssenza += 1; 
             break;
           case 'pioggia': 
-            summary.orePioggia += ore; 
-            break;
-        }
+          summary.orePioggia += ore; 
+          break;
       }
-    });
+    } else if (!isWeekend) {
+      // ✅ Conta come assenza solo i giorni feriali vuoti (non weekend e non dimessi)
+      summary.giorniAssenza += 1;
+    }
+  });
     return summary;
   }, [presenze, selectedWorker, daysInMonth]);
 
@@ -659,9 +676,14 @@ const checkDimissioni = (lavoratoreId, date) => {
                     
                     // ✅ Mostra warning se ci sono ore permesso
                     const hasPermesso = presenza?.ore_permesso && parseFloat(presenza.ore_permesso) > 0;
-                    
-                    return (
-                      <div 
+
+// ✅ Non mostrare i giorni dopo le dimissioni
+if (isDimesso && !presenza) {
+  return null;
+}
+
+return (
+  <div 
                         key={index}
                         className={`border-2 rounded-lg p-3 ${isDimesso ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} transition-all ${
   isDimesso ? 'bg-gray-200 border-gray-400' :

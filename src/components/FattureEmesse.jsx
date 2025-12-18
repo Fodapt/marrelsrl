@@ -19,6 +19,7 @@ function FattureEmesse() {
   const [showAccontiModal, setShowAccontiModal] = useState(false);
   const [fatturaSelezionata, setFatturaSelezionata] = useState(null);
   const [filtroCliente, setFiltroCliente] = useState('');
+  const [filtroCantiere, setFiltroCantiere] = useState('');
 
   // ✅ MOSTRA LOADING
   if (loading.fattureEmesse || loading.fornitori || loading.cantieri) {
@@ -60,18 +61,23 @@ function FattureEmesse() {
   const fattureFiltrate = useMemo(() => {
     return fattureEmesse.filter(f => {
       if (filtroCliente && f.cliente_id !== filtroCliente) return false;
+      if (filtroCantiere && f.cantiere_id !== filtroCantiere) return false;
       return true;
     }).sort((a, b) => {
       const numA = a.numero_fattura || '';
       const numB = b.numero_fattura || '';
       return numB.localeCompare(numA, undefined, { numeric: true, sensitivity: 'base' });
     });
-  }, [fattureEmesse, filtroCliente]);
+  }, [fattureEmesse, filtroCliente, filtroCantiere]);
 
   const riepilogoCliente = useMemo(() => {
-    if (!filtroCliente) return null;
+    if (!filtroCliente && !filtroCantiere) return null; 
     
-    const fatture = fattureEmesse.filter(f => f.cliente_id === filtroCliente);
+    const fatture = fattureEmesse.filter(f => {
+    if (filtroCliente && f.cliente_id !== filtroCliente) return false; 
+    if (filtroCantiere && f.cantiere_id !== filtroCantiere) return false; 
+    return true; 
+  });
     const totaleEmesso = fatture.reduce((sum, f) => 
       sum + calcolaTotale(f.imponibile, f.percentuale_iva), 0);
     const totaleIncassato = fatture.reduce((sum, f) => 
@@ -79,7 +85,7 @@ function FattureEmesse() {
     const residuo = totaleEmesso - totaleIncassato;
     
     return { totaleEmesso, totaleIncassato, residuo };
-  }, [fattureEmesse, filtroCliente]);
+  }, [fattureEmesse, filtroCliente, filtroCantiere]);
 
   // ✅ SALVA FATTURA
   const handleSave = async () => {
@@ -217,7 +223,20 @@ function FattureEmesse() {
             <option key={f.id} value={f.id}>{f.ragione_sociale}</option>
           ))}
         </select>
+
+        <select 
+  className="border rounded px-3 py-2"
+  value={filtroCantiere}
+  onChange={(e) => setFiltroCantiere(e.target.value)}
+>
+  <option value="">Tutti i cantieri</option>
+  {cantieri.map(c => (
+    <option key={c.id} value={c.id}>{c.nome}</option>
+  ))}
+</select>
       </div>
+
+     
 
       {/* Riepilogo Cliente */}
       {riepilogoCliente && (
