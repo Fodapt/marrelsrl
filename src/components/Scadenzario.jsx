@@ -116,10 +116,10 @@ function Scadenzario() {
           if (giorniMancanti <= 30 && giorniMancanti >= -30) {
             const cantiere = cantieri.find(c => c.id === ultimoUnilav.cantiere_id);
             
-            // Verifica se lavoratore è attivo (controlla se c'è un unilav attivo dopo eventuali dimissioni)
-const univlavOrdinati = univlavLav.sort((a, b) => new Date(b.data_inizio) - new Date(a.data_inizio));
-const ultimoUnilav = univlavOrdinati[0];
-const isAttivo = ultimoUnilav.tipo_unilav !== 'dimissioni' || new Date(ultimoUnilav.data_inizio) > oggi;
+            // Verifica se lavoratore è attivo (controlla l'ultimo unilav ordinato per data)
+const univlavOrdinati = [...univlavLav].sort((a, b) => new Date(b.data_inizio) - new Date(a.data_inizio));
+const ultimoUnilavAttivo = univlavOrdinati[0];
+const isAttivo = ultimoUnilavAttivo.tipo_unilav !== 'dimissioni' || new Date(ultimoUnilavAttivo.data_inizio) > oggi;
             
             scadenze.push({
               tipo: 'contratto',
