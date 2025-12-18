@@ -75,11 +75,17 @@ const calcolaResiduo = (fattura) => {
     }
     return true;
   }).sort((a, b) => {
-      const numA = a.numero_fattura || '';
-      const numB = b.numero_fattura || '';
-      return numB.localeCompare(numA, undefined, { numeric: true, sensitivity: 'base' });
-    });
-  }, [fattureEmesse, filtroCliente, filtroCantiere, filtroTipo]);
+    // Prima ordina per anno (dal più recente al più vecchio)
+    const annoA = new Date(a.data_fattura).getFullYear();
+    const annoB = new Date(b.data_fattura).getFullYear();
+    if (annoB !== annoA) return annoB - annoA;
+    
+    // Poi per numero fattura (dal più alto al più basso)
+    const numA = a.numero_fattura || '';
+    const numB = b.numero_fattura || '';
+    return numB.localeCompare(numA, undefined, { numeric: true, sensitivity: 'base' });
+  });
+}, [fattureEmesse, filtroCliente, filtroCantiere, filtroTipo]);
 
   const riepilogoCliente = useMemo(() => {
     if (!filtroCliente && !filtroCantiere) return null; 

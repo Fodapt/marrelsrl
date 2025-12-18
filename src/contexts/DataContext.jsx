@@ -97,19 +97,36 @@ export const DataProvider = ({ children }) => {
   // FETCH DI UNA TAB.
   // ---------------------------
   const fetchTable = async (key) => {
-    const tableName = tableMapping[key];
-    const startTime = performance.now();
+  const tableName = tableMapping[key];
+  const startTime = performance.now();
 
-    setErrors(prev => ({ ...prev, [key]: null }));
+  setErrors(prev => ({ ...prev, [key]: null }));
 
-    try {
-      const result = await supabaseHelpers.getAll(tableName);
-      const duration = performance.now() - startTime;
-      performanceLog.logQuery(tableName, duration);
+  try {
+    const result = await supabaseHelpers.getAll(tableName);
+    const duration = performance.now() - startTime;
+    performanceLog.logQuery(tableName, duration);
 
-      if (result.success) {
-        setData(prev => ({ ...prev, [key]: result.data || [] }));
-      } else {
+    if (result.success) {
+      // Ordina alfabeticamente i dati
+      let sortedData = result.data || [];
+      
+      if (key === 'lavoratori') {
+        sortedData = sortedData.sort((a, b) => 
+          `${a.cognome} ${a.nome}`.localeCompare(`${b.cognome} ${b.nome}`, 'it')
+        );
+      } else if (key === 'fornitori' || key === 'clienti') {
+        sortedData = sortedData.sort((a, b) => 
+          (a.ragione_sociale || '').localeCompare(b.ragione_sociale || '', 'it')
+        );
+      } else if (key === 'cantieri') {
+        sortedData = sortedData.sort((a, b) => 
+          (a.nome || '').localeCompare(b.nome || '', 'it')
+        );
+      }
+      
+      setData(prev => ({ ...prev, [key]: sortedData }));
+    } else {
         setErrors(prev => ({ ...prev, [key]: result.error }));
         setData(prev => ({ ...prev, [key]: [] }));
       }
