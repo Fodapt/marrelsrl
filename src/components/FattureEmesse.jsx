@@ -14,7 +14,7 @@ function FattureEmesse() {
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [formData, setFormData] = useState({});
+  const [formData, setFormData] = useState({ tipo: 'fattura' });
   const [saving, setSaving] = useState(false);
   const [showAccontiModal, setShowAccontiModal] = useState(false);
   const [fatturaSelezionata, setFatturaSelezionata] = useState(null);
@@ -54,9 +54,10 @@ function FattureEmesse() {
   };
 
   const calcolaResiduo = (fattura) => {
-    const totale = calcolaTotale(fattura.imponibile, fattura.percentuale_iva);
-    return totale - calcolaIncassato(fattura);
-  };
+  const totale = calcolaImportoEffettivo(fattura);
+  const incassato = calcolaIncassato(fattura);
+  return fattura.tipo === 'nota_credito' ? totale + incassato : totale - incassato;
+};
 
   const fattureFiltrate = useMemo(() => {
     return fattureEmesse.filter(f => {
@@ -78,8 +79,10 @@ function FattureEmesse() {
     if (filtroCantiere && f.cantiere_id !== filtroCantiere) return false; 
     return true; 
   });
-    const totaleEmesso = fatture.reduce((sum, f) => 
-      sum + calcolaTotale(f.imponibile, f.percentuale_iva), 0);
+    const totaleEmesso = fatture.reduce((sum, f) => {
+  const totale = calcolaTotale(f.imponibile, f.percentuale_iva);
+  return f.tipo === 'nota_credito' ? sum - totale : sum + totale;
+}, 0);
     const totaleIncassato = fatture.reduce((sum, f) => 
       sum + calcolaIncassato(f), 0);
     const residuo = totaleEmesso - totaleIncassato;
@@ -89,23 +92,28 @@ function FattureEmesse() {
 
   // ✅ SALVA FATTURA
   const handleSave = async () => {
-    if (!formData.dataFattura || !formData.numeroFattura || !formData.clienteId || !formData.imponibile) {
-      return alert('⚠️ Compila tutti i campi obbligatori:\n- Data Fattura\n- Numero Fattura\n- Cliente\n- Imponibile');
-    }
+  if (!formData.dataFattura || !formData.numeroFattura || !formData.clienteId || !formData.imponibile) {
+    return alert('⚠️ Compila tutti i campi obbligatori:\n- Data Fattura\n- Numero Fattura\n- Cliente\n- Imponibile');
+  }
+
+  if (formData.tipo === 'nota_credito' && !formData.fatturaRiferimento) {
+    return alert('⚠️ Per le note di credito è obbligatorio indicare la fattura di riferimento');
+  }
 
     setSaving(true);
 
     const dataForSupabase = {
-      data_fattura: formData.dataFattura,
-      numero_fattura: formData.numeroFattura,
-      cliente_id: formData.clienteId,
-      cantiere_id: formData.cantiereId || null,
-      imponibile: parseFloat(formData.imponibile),
-      percentuale_iva: parseFloat(formData.percentualeIVA || 22),
-      acconti: formData.acconti || [],
-      note: formData.note || null
-    };
-
+  data_fattura: formData.dataFattura,
+  numero_fattura: formData.numeroFattura,
+  cliente_id: formData.clienteId,
+  cantiere_id: formData.cantiereId || null,
+  imponibile: parseFloat(formData.imponibile),
+  percentuale_iva: parseFloat(formData.percentualeIVA || 22),
+  acconti: formData.acconti || [],
+  note: formData.note || null,
+  tipo: formData.tipo || 'fattura',
+  fattura_riferimento: formData.fatturaRiferimento || null
+};
     let result;
     if (editingId) {
       result = await updateRecord('fattureEmesse', editingId, dataForSupabase);
@@ -118,7 +126,7 @@ function FattureEmesse() {
     if (result.success) {
       alert(editingId ? '✅ Fattura aggiornata!' : '✅ Fattura creata!');
       setShowForm(false);
-      setFormData({ percentualeIVA: 22, acconti: [] });
+      setFormData({ tipo: 'fattura', percentualeIVA: 22, acconti: [] });
       setEditingId(null);
     } else {
       alert('❌ Errore: ' + result.error);
@@ -142,16 +150,18 @@ function FattureEmesse() {
 
   // ✅ EDIT FATTURA
   const handleEdit = (fattura) => {
-    setFormData({
-      dataFattura: fattura.data_fattura,
-      numeroFattura: fattura.numero_fattura,
-      clienteId: fattura.cliente_id,
-      cantiereId: fattura.cantiere_id,
-      imponibile: fattura.imponibile,
-      percentualeIVA: fattura.percentuale_iva,
-      acconti: fattura.acconti || [],
-      note: fattura.note
-    });
+  setFormData({
+    dataFattura: fattura.data_fattura,
+    numeroFattura: fattura.numero_fattura,
+    clienteId: fattura.cliente_id,
+    cantiereId: fattura.cantiere_id,
+    imponibile: fattura.imponibile,
+    percentualeIVA: fattura.percentuale_iva,
+    acconti: fattura.acconti || [],
+    note: fattura.note,
+    tipo: fattura.tipo || 'fattura',
+    fatturaRiferimento: fattura.fattura_riferimento
+  });
     setEditingId(fattura.id);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -418,9 +428,10 @@ function FattureEmesse() {
             {fattureFiltrate.map(fattura => {
               const cliente = fornitori.find(f => f.id === fattura.cliente_id);
               const cantiere = cantieri.find(c => c.id === fattura.cantiere_id);
-              const totale = calcolaTotale(fattura.imponibile, fattura.percentuale_iva);
-              const incassato = calcolaIncassato(fattura);
-              const residuo = calcolaResiduo(fattura);
+              const totale = calcolaImportoEffettivo(fattura);
+const incassato = calcolaIncassato(fattura);
+const residuo = calcolaResiduo(fattura);
+const isNotaCredito = fattura.tipo === 'nota_credito';
 
               return (
                 <tr key={fattura.id} className="border-t hover:bg-gray-50">
@@ -428,15 +439,21 @@ function FattureEmesse() {
                   <td className="px-3 py-2 font-mono">{fattura.numero_fattura}</td>
                   <td className="px-3 py-2">{cliente?.ragione_sociale || '-'}</td>
                   <td className="px-3 py-2">{cantiere?.nome || '-'}</td>
-                  <td className="px-3 py-2 text-right">€ {parseFloat(fattura.imponibile).toFixed(2)}</td>
-                  <td className="px-3 py-2 text-right">
-                    € {calcolaIVA(fattura.imponibile, fattura.percentuale_iva).toFixed(2)}
-                  </td>
-                  <td className="px-3 py-2 text-right font-semibold">€ {totale.toFixed(2)}</td>
-                  <td className="px-3 py-2 text-right text-green-700">€ {incassato.toFixed(2)}</td>
-                  <td className="px-3 py-2 text-right font-semibold text-orange-700">
-                    € {residuo.toFixed(2)}
-                  </td>
+                  <td className={`px-3 py-2 text-right ${isNotaCredito ? 'text-red-600' : ''}`}>
+  € {(isNotaCredito ? -1 : 1) * parseFloat(fattura.imponibile).toFixed(2)}
+</td>
+<td className={`px-3 py-2 text-right ${isNotaCredito ? 'text-red-600' : ''}`}>
+  € {(isNotaCredito ? -1 : 1) * calcolaIVA(fattura.imponibile, fattura.percentuale_iva).toFixed(2)}
+</td>
+<td className={`px-3 py-2 text-right font-medium ${isNotaCredito ? 'text-red-600' : ''}`}>
+  € {totale.toFixed(2)}
+</td>
+<td className={`px-3 py-2 text-right ${isNotaCredito ? 'text-red-600' : 'text-green-600'}`}>
+  € {incassato.toFixed(2)}
+</td>
+<td className={`px-3 py-2 text-right font-medium ${isNotaCredito ? 'text-red-600' : 'text-orange-600'}`}>
+  € {residuo.toFixed(2)}
+</td>
                   <td className="px-3 py-2 text-center">
                     <button 
                       onClick={() => {
