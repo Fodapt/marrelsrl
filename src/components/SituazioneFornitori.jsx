@@ -348,64 +348,81 @@ function SituazioneFornitori() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
- // ✅ EXPORT PDF (semplificato - senza funzioni complesse)
-  const exportPDF = (tipo = 'situazione') => {
-    const ordini = filtroFornitore 
-      ? ordiniFornitori.filter(o => o.fornitore_id === filtroFornitore)
-      : ordiniFornitori;
+ const exportPDF = (tipo = 'situazione') => {
+  const ordini = filtroFornitore 
+    ? ordiniFornitori.filter(o => o.fornitore_id === filtroFornitore)
+    : ordiniFornitori;
 
-    let ordiniFiltrati = [];
-    
-    if (tipo === 'da_saldare') {
-      ordiniFiltrati = ordini.filter(ord => {
-        if (ord.tipo === 'fattura_diretta') {
-          const accInfo = calcolaAccontiFatturaDiretta(ord);
-          return accInfo.residuo > 0;
-        } else {
-          const stato = calcolaStatoOrdine(ord);
-          return stato.saldoDaPagare > 0;
-        }
-      });
-    } else {
-      ordiniFiltrati = ordini;
-    }
-
-    if (ordiniFiltrati.length === 0) {
-      alert('✅ Nessun dato da esportare!');
-      return;
-    }
-
-    // Calcola totali
-    let importoTotaleOrdini = 0;
-    let importoTotalePagato = 0;
-    let importoTotaleDaSaldare = 0;
-
-    ordiniFiltrati.forEach(ord => {
-      importoTotaleOrdini += parseFloat(ord.importo || 0);
-      
+  let ordiniFiltrati = [];
+  
+  if (tipo === 'da_saldare') {
+    ordiniFiltrati = ordini.filter(ord => {
       if (ord.tipo === 'fattura_diretta') {
         const accInfo = calcolaAccontiFatturaDiretta(ord);
-        importoTotalePagato += accInfo.pagato;
-        importoTotaleDaSaldare += accInfo.residuo;
+        return accInfo.residuo > 0;
       } else {
         const stato = calcolaStatoOrdine(ord);
-        importoTotalePagato += stato.effettivamentePagato;
-        importoTotaleDaSaldare += stato.saldoDaPagare;
+        return stato.saldoDaPagare > 0;
       }
     });
+  } else {
+    ordiniFiltrati = ordini;
+  }
 
-    const oggi = new Date();
-    const dataStampa = oggi.toLocaleDateString('it-IT', { 
-      day: '2-digit', 
-      month: '2-digit', 
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  if (ordiniFiltrati.length === 0) {
+    alert('✅ Nessun dato da esportare!');
+    return;
+  }
 
-    const titolo = tipo === 'da_saldare' ? '⚠️ Fatture da Saldare' : '📊 Situazione Fornitori';
+  // Raggruppa per fornitore
+  const ordiniPerFornitore = {};
+  ordiniFiltrati.forEach(ord => {
+    const fornitoreId = ord.fornitore_id;
+    if (!ordiniPerFornitore[fornitoreId]) {
+      ordiniPerFornitore[fornitoreId] = [];
+    }
+    ordiniPerFornitore[fornitoreId].push(ord);
+  });
+  
+  // Ordina fornitori alfabeticamente
+  const fornitoriOrdinati = Object.keys(ordiniPerFornitore).sort((a, b) => {
+    const nomeA = fornitori.find(f => f.id === a)?.ragione_sociale || '';
+    const nomeB = fornitori.find(f => f.id === b)?.ragione_sociale || '';
+    return nomeA.localeCompare(nomeB);
+  });
+  
+  // Calcola totali generali
+  let importoTotaleOrdini = 0;
+  let importoTotalePagato = 0;
+  let importoTotaleDaSaldare = 0;
 
-    let html = `
+  ordiniFiltrati.forEach(ord => {
+    importoTotaleOrdini += parseFloat(ord.importo || 0);
+    
+    if (ord.tipo === 'fattura_diretta') {
+      const accInfo = calcolaAccontiFatturaDiretta(ord);
+      importoTotalePagato += accInfo.pagato;
+      importoTotaleDaSaldare += accInfo.residuo;
+    } else {
+      const stato = calcolaStatoOrdine(ord);
+      importoTotalePagato += stato.effettivamentePagato;
+      importoTotaleDaSaldare += stato.saldoDaPagare;
+    }
+  });
+
+  const oggi = new Date();
+  const dataStampa = oggi.toLocaleDateString('it-IT', { 
+    day: '2-digit', 
+    month: '2-digit', 
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
+  const titolo = tipo === 'da_saldare' ? '⚠️ Fatture da Saldare' : '📊 Situazione Fornitori';
+  const coloreTitolo = tipo === 'da_saldare' ? '#dc2626' : '#3b82f6';
+
+  let html = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -414,30 +431,67 @@ function SituazioneFornitori() {
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; font-size: 11px; }
     h1 { color: #1e40af; border-bottom: 3px solid #1e40af; padding-bottom: 10px; }
-    table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+    h2 { color: #7c3aed; margin-top: 30px; border-bottom: 2px solid #7c3aed; padding-bottom: 5px; }
+    table { border-collapse: collapse; width: 100%; margin: 15px 0; }
     th, td { border: 1px solid #333; padding: 8px; text-align: left; }
     th { background-color: #3b82f6; color: white; }
     tr:nth-child(even) { background-color: #f3f4f6; }
-    .summary { background: #eff6ff; padding: 15px; border-radius: 5px; margin: 20px 0; }
+    .fornitore-summary { background: #faf5ff; padding: 10px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #7c3aed; }
+    .totale-generale { background: ${tipo === 'da_saldare' ? '#fee2e2' : '#eff6ff'}; padding: 15px; border-radius: 5px; margin: 20px 0; border: 2px solid ${coloreTitolo}; }
     @media print {
       * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       button { display: none !important; }
+      h2 { page-break-before: always; }
     }
   </style>
 </head>
 <body>
-  <button onclick="window.print()" style="background: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px;">
+  <button onclick="window.print()" style="background: ${coloreTitolo}; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px;">
     🖨️ Stampa / Salva PDF
   </button>
   
-  <h1>${titolo}</h1>
+  <h1>${titolo} - Raggruppate per Fornitore</h1>
   <p><strong>Data Stampa:</strong> ${dataStampa}</p>
   
-  <div class="summary">
+  <div class="totale-generale">
+    <h3 style="margin-top: 0; color: ${coloreTitolo};">📊 RIEPILOGO GENERALE</h3>
+    <p><strong>Totale Fornitori:</strong> ${fornitoriOrdinati.length}</p>
     <p><strong>Totale Ordini:</strong> ${ordiniFiltrati.length}</p>
     <p><strong>Importo Totale:</strong> € ${importoTotaleOrdini.toFixed(2)}</p>
     <p><strong>Già Pagato:</strong> € ${importoTotalePagato.toFixed(2)}</p>
-    <p><strong>Residuo da Pagare:</strong> € ${importoTotaleDaSaldare.toFixed(2)}</p>
+    <p style="font-size: 14px; color: ${coloreTitolo};"><strong>${tipo === 'da_saldare' ? '⚠️ RESIDUO DA SALDARE:' : 'Residuo da Pagare:'} € ${importoTotaleDaSaldare.toFixed(2)}</strong></p>
+  </div>
+`;
+
+  // Genera tabelle per ogni fornitore
+  fornitoriOrdinati.forEach(fornitoreId => {
+    const ordiniFornitore = ordiniPerFornitore[fornitoreId];
+    const fornitore = fornitori.find(f => f.id === fornitoreId);
+    
+    // Calcola totali fornitore
+    let totaleFornitore = 0;
+    let pagatoFornitore = 0;
+    let residuoFornitore = 0;
+    
+    ordiniFornitore.forEach(ord => {
+      totaleFornitore += parseFloat(ord.importo || 0);
+      
+      if (ord.tipo === 'fattura_diretta') {
+        const accInfo = calcolaAccontiFatturaDiretta(ord);
+        pagatoFornitore += accInfo.pagato;
+        residuoFornitore += accInfo.residuo;
+      } else {
+        const stato = calcolaStatoOrdine(ord);
+        pagatoFornitore += stato.effettivamentePagato;
+        residuoFornitore += stato.saldoDaPagare;
+      }
+    });
+    
+    html += `
+  <h2>🏪 ${fornitore?.ragione_sociale || 'N/A'}</h2>
+  
+  <div class="fornitore-summary">
+    <p><strong>Ordini:</strong> ${ordiniFornitore.length} | <strong>Totale:</strong> € ${totaleFornitore.toFixed(2)} | <strong>Pagato:</strong> € ${pagatoFornitore.toFixed(2)} | <strong style="color: ${coloreTitolo};">Residuo: € ${residuoFornitore.toFixed(2)}</strong></p>
   </div>
   
   <table>
@@ -445,16 +499,14 @@ function SituazioneFornitori() {
       <tr>
         <th>Num. Ordine</th>
         <th>Data</th>
-        <th>Fornitore</th>
         <th>Cantiere</th>
         <th>Importo</th>
         <th>Pagato</th>
-        <th>Residuo</th>
+        <th style="background-color: ${coloreTitolo};">Residuo</th>
       </tr>
     </thead>
     <tbody>
-      ${ordiniFiltrati.map(ord => {
-        const fornitore = fornitori.find(f => f.id === ord.fornitore_id);
+      ${ordiniFornitore.map(ord => {
         const cantiere = cantieri.find(c => c.id === ord.cantiere_id);
         
         let giaPagato = 0;
@@ -472,35 +524,36 @@ function SituazioneFornitori() {
 
         return `
         <tr>
-          <td>${ord.numero_ordine}</td>
+          <td>${ord.tipo === 'fattura_diretta' ? ord.numero_ordine.replace('DIRETTO-', 'FATTURA-') : ord.numero_ordine}</td>
           <td>${formatDate(ord.data_ordine)}</td>
-          <td>${fornitore?.ragione_sociale || 'N/A'}</td>
           <td>${cantiere?.nome || '-'}</td>
           <td>€ ${parseFloat(ord.importo).toFixed(2)}</td>
           <td>€ ${giaPagato.toFixed(2)}</td>
-          <td>€ ${residuo.toFixed(2)}</td>
+          <td style="font-weight: bold; color: ${coloreTitolo};">€ ${residuo.toFixed(2)}</td>
         </tr>
         `;
       }).join('')}
     </tbody>
   </table>
-  
+`;
+  });
+
+  html += `
   <div style="margin-top: 30px; padding: 10px; background: #eff6ff; border-top: 2px solid #1e40af; font-size: 9px;">
     <p>Documento generato automaticamente da Marrel S.r.l. - ${dataStampa}</p>
   </div>
 </body>
 </html>`;
 
-    const nuovaFinestra = window.open('', '_blank');
-    if (nuovaFinestra) {
-      nuovaFinestra.document.write(html);
-      nuovaFinestra.document.close();
-    } else {
-      alert('⚠️ Popup bloccato! Abilita i popup per questo sito.');
-    }
-  };
-
-  return (
+  const nuovaFinestra = window.open('', '_blank');
+  if (nuovaFinestra) {
+    nuovaFinestra.document.write(html);
+    nuovaFinestra.document.close();
+  } else {
+    alert('⚠️ Popup bloccato! Abilita i popup per questo sito.');
+  }
+};
+return (
     <div className="space-y-4">
       {/* Header */}
       <div className="space-y-4">
@@ -925,21 +978,46 @@ function SituazioneFornitori() {
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <div className="flex items-center gap-3">
-                      <h3 className="text-xl font-bold text-blue-600">
-                        {ordine.tipo === 'fattura_diretta' ? 'Fattura Diretta' : 'Ordine'} {ordine.numero_ordine.replace('DIRETTO-', '')}
-                      </h3>
-                      {ordine.tipo === 'fattura_diretta' ? (
-                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                          Fattura Diretta
-                        </span>
-                      ) : (
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          stato.residuoOrdine <= 0 ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
-                        }`}>
-                          {stato.residuoOrdine <= 0 ? 'Completato' : 'In corso'}
-                        </span>
-                      )}
-                    </div>
+  <h3 className="text-xl font-bold text-blue-600">
+    {ordine.tipo === 'fattura_diretta' ? 'Fattura Diretta' : 'Ordine'} {ordine.numero_ordine.replace('DIRETTO-', '')}
+  </h3>
+  {ordine.tipo === 'fattura_diretta' ? (
+    (() => {
+      const hasNoteCredito = ordine.note_credito && ordine.note_credito.length > 0;
+      
+      if (!hasNoteCredito) {
+        return (
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+            Fattura Diretta
+          </span>
+        );
+      }
+      
+      const totaleNoteCredito = ordine.note_credito.reduce((sum, nc) => sum + parseFloat(nc.importo || 0), 0);
+      const importoFattura = parseFloat(ordine.importo || 0);
+      const isAnnullamento = totaleNoteCredito >= importoFattura;
+      
+      return (
+        <>
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+            Fattura Diretta
+          </span>
+          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+            isAnnullamento ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+          }`}>
+            📋 {isAnnullamento ? 'Annullata' : 'Nota Credito'} (€ {totaleNoteCredito.toFixed(2)})
+          </span>
+        </>
+      );
+    })()
+  ) : (
+    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+      stato.residuoOrdine <= 0 ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+    }`}>
+      {stato.residuoOrdine <= 0 ? 'Completato' : 'In corso'}
+    </span>
+  )}
+</div>
                     <div className="text-sm text-gray-600 mt-1">
                       <span className="font-medium">{fornitore?.ragione_sociale || '-'}</span>
                       {cantiere && <span> • {cantiere.nome}</span>}
@@ -1581,7 +1659,7 @@ function GestioneAccontiModal({
   updateRecord,
   formatDate,
   calcolaAccontiFatturaDiretta
-})
+}) {
   const [dataAcconto, setDataAcconto] = useState(new Date().toISOString().split('T')[0]);
   const [importoAcconto, setImportoAcconto] = useState('');
   const [notaAcconto, setNotaAcconto] = useState('');
@@ -1644,6 +1722,60 @@ function GestioneAccontiModal({
     }
   };
 
+
+  const aggiungiNotaCredito = async () => {
+    const importo = parseFloat(importoNotaCredito);
+    if (!importo || importo <= 0) {
+      return alert('⚠️ Inserisci un importo valido');
+    }
+
+    if (!motivoNotaCredito.trim()) {
+      return alert('⚠️ Inserisci un motivo per la nota di credito');
+    }
+
+    setSaving(true);
+
+    const nuovaNotaCredito = {
+      id: Date.now().toString(),
+      data: dataNotaCredito,
+      importo,
+      motivo: motivoNotaCredito
+    };
+
+    const nuoveNoteCredito = [...(fattura.note_credito || []), nuovaNotaCredito];
+    const result = await updateRecord('ordiniFornitori', fattura.id, { note_credito: nuoveNoteCredito });
+
+    setSaving(false);
+
+    if (result.success) {
+      setImportoNotaCredito('');
+      setMotivoNotaCredito('');
+      setDataNotaCredito(new Date().toISOString().split('T')[0]);
+      setShowNoteCreditoSection(false);
+      alert('✅ Nota di credito registrata!');
+      onClose();
+    } else {
+      alert('❌ Errore: ' + result.error);
+    }
+  };
+
+  const rimuoviNotaCredito = async (notaCreditoId) => {
+    if (!confirm('❌ Eliminare questa nota di credito?')) return;
+
+    setSaving(true);
+    const nuoveNoteCredito = (fattura.note_credito || []).filter(nc => nc.id !== notaCreditoId);
+    const result = await updateRecord('ordiniFornitori', fattura.id, { note_credito: nuoveNoteCredito });
+    setSaving(false);
+
+    if (result.success) {
+      alert('✅ Nota di credito eliminata!');
+      onClose();
+    } else {
+      alert('❌ Errore: ' + result.error);
+    }
+  };
+
+  
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
       <div className="bg-white rounded-lg max-w-4xl w-full p-6 my-8 max-h-[90vh] overflow-y-auto">
