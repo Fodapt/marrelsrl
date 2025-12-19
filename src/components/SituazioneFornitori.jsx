@@ -50,15 +50,28 @@ function SituazioneFornitori() {
   };
 
   const calcolaAccontiFatturaDiretta = (ordine) => {
-    if (!ordine || ordine.tipo !== 'fattura_diretta') return { totale: 0, pagato: 0, residuo: 0, acconti: [] };
-    
-    const acconti = ordine.acconti_pagamento || [];
-    const totalePagato = acconti.reduce((sum, acc) => sum + parseFloat(acc.importo || 0), 0);
-    const totale = parseFloat(ordine.importo || 0);
-    const residuo = totale - totalePagato;
-    
-    return { totale, pagato: totalePagato, residuo, acconti };
+  if (!ordine || ordine.tipo !== 'fattura_diretta') return { totale: 0, pagato: 0, residuo: 0, acconti: [], noteCredito: [], totaleNoteCredito: 0 };
+  
+  const acconti = ordine.acconti_pagamento || [];
+  const noteCredito = ordine.note_credito || [];
+  
+  const totalePagato = acconti.reduce((sum, acc) => sum + parseFloat(acc.importo || 0), 0);
+  const totaleNoteCredito = noteCredito.reduce((sum, nc) => sum + parseFloat(nc.importo || 0), 0);
+  
+  const importoOriginale = parseFloat(ordine.importo || 0);
+  const totaleEffettivo = importoOriginale - totaleNoteCredito;
+  const residuo = totaleEffettivo - totalePagato;
+  
+  return { 
+    totale: importoOriginale, 
+    totaleEffettivo, 
+    totaleNoteCredito,
+    pagato: totalePagato, 
+    residuo, 
+    acconti,
+    noteCredito 
   };
+};
 
   const calcolaStatoOrdine = (ordine) => {
     const fatture = ordine.fatture || [];
@@ -1568,11 +1581,15 @@ function GestioneAccontiModal({
   updateRecord,
   formatDate,
   calcolaAccontiFatturaDiretta
-}) {
+})
   const [dataAcconto, setDataAcconto] = useState(new Date().toISOString().split('T')[0]);
   const [importoAcconto, setImportoAcconto] = useState('');
   const [notaAcconto, setNotaAcconto] = useState('');
   const [saving, setSaving] = useState(false);
+  const [dataNotaCredito, setDataNotaCredito] = useState(new Date().toISOString().split('T')[0]);
+  const [importoNotaCredito, setImportoNotaCredito] = useState('');
+  const [motivoNotaCredito, setMotivoNotaCredito] = useState('');
+  const [showNoteCreditoSection, setShowNoteCreditoSection] = useState(false);
 
   const fornitore = fornitori.find(f => f.id === fattura.fornitore_id);
   const cantiere = cantieri.find(c => c.id === fattura.cantiere_id);
@@ -1651,26 +1668,36 @@ function GestioneAccontiModal({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-          <div className="bg-blue-50 p-3 rounded border border-blue-200">
-            <div className="text-xs text-blue-700 mb-1">Totale Fattura</div>
-            <div className="text-lg font-bold text-blue-900">€ {accInfo.totale.toFixed(2)}</div>
-          </div>
-          <div className="bg-green-50 p-3 rounded border border-green-200">
-            <div className="text-xs text-green-700 mb-1">Già Pagato</div>
-            <div className="text-lg font-bold text-green-900">€ {accInfo.pagato.toFixed(2)}</div>
-          </div>
-          <div className={`p-3 rounded border ${
-            accInfo.residuo > 0 ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200'
-          }`}>
-            <div className={`text-xs mb-1 ${accInfo.residuo > 0 ? 'text-orange-700' : 'text-gray-700'}`}>
-              Residuo
-            </div>
-            <div className={`text-lg font-bold ${accInfo.residuo > 0 ? 'text-orange-900' : 'text-gray-900'}`}>
-              € {accInfo.residuo.toFixed(2)}
-            </div>
-          </div>
-        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+  <div className="bg-blue-50 p-3 rounded border border-blue-200">
+    <div className="text-xs text-blue-700 mb-1">Totale Originale</div>
+    <div className="text-lg font-bold text-blue-900">€ {accInfo.totale.toFixed(2)}</div>
+  </div>
+  <div className="bg-red-50 p-3 rounded border border-red-200">
+    <div className="text-xs text-red-700 mb-1">Note di Credito</div>
+    <div className="text-lg font-bold text-red-900">- € {accInfo.totaleNoteCredito.toFixed(2)}</div>
+  </div>
+  <div className="bg-purple-50 p-3 rounded border border-purple-200">
+    <div className="text-xs text-purple-700 mb-1">Totale Effettivo</div>
+    <div className="text-lg font-bold text-purple-900">€ {accInfo.totaleEffettivo.toFixed(2)}</div>
+  </div>
+  <div className="bg-green-50 p-3 rounded border border-green-200">
+    <div className="text-xs text-green-700 mb-1">Già Pagato</div>
+    <div className="text-lg font-bold text-green-900">€ {accInfo.pagato.toFixed(2)}</div>
+  </div>
+</div>
+<div className="mb-6">
+  <div className={`p-3 rounded border ${
+    accInfo.residuo > 0 ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200'
+  }`}>
+    <div className={`text-xs mb-1 ${accInfo.residuo > 0 ? 'text-orange-700' : 'text-gray-700'}`}>
+      Residuo da Pagare
+    </div>
+    <div className={`text-2xl font-bold ${accInfo.residuo > 0 ? 'text-orange-900' : 'text-gray-900'}`}>
+      € {accInfo.residuo.toFixed(2)}
+    </div>
+  </div>
+</div>
 
         {accInfo.residuo > 0 && (
           <div className="bg-green-50 p-4 rounded-lg mb-4 border border-green-200">
@@ -1762,7 +1789,86 @@ function GestioneAccontiModal({
             </div>
           )}
         </div>
+{/* Sezione Note di Credito */}
+<div className="mb-6">
+  <div className="flex justify-between items-center mb-3">
+    <h4 className="font-semibold text-red-900">📋 Note di Credito ({(accInfo.noteCredito || []).length})</h4>
+    <button 
+      onClick={() => setShowNoteCreditoSection(!showNoteCreditoSection)}
+      className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700"
+    >
+      {showNoteCreditoSection ? '✕ Chiudi' : '➕ Aggiungi Nota Credito'}
+    </button>
+  </div>
 
+  {showNoteCreditoSection && (
+    <div className="bg-red-50 p-4 rounded border border-red-200 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-sm font-medium mb-1">Data Nota Credito</label>
+          <input 
+            type="date"
+            className="border rounded px-3 py-2 w-full"
+            value={dataNotaCredito}
+            onChange={(e) => setDataNotaCredito(e.target.value)}
+            disabled={saving}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Importo (€)</label>
+          <input 
+            type="number"
+            step="0.01"
+            className="border rounded px-3 py-2 w-full"
+            placeholder="0.00"
+            value={importoNotaCredito}
+            onChange={(e) => setImportoNotaCredito(e.target.value)}
+            disabled={saving}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Motivo</label>
+          <input 
+            type="text"
+            className="border rounded px-3 py-2 w-full"
+            placeholder="es: Sconto, Reso..."
+            value={motivoNotaCredito}
+            onChange={(e) => setMotivoNotaCredito(e.target.value)}
+            disabled={saving}
+          />
+        </div>
+      </div>
+      <button 
+        onClick={aggiungiNotaCredito}
+        disabled={saving}
+        className="mt-3 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50 w-full"
+      >
+        {saving ? '⏳ Salvataggio...' : '✓ Aggiungi Nota di Credito'}
+      </button>
+    </div>
+  )}
+
+  {/* Lista Note di Credito */}
+  {(accInfo.noteCredito || []).length > 0 && (
+    <div className="space-y-2">
+      {accInfo.noteCredito.map(nc => (
+        <div key={nc.id} className="p-3 bg-red-50 border border-red-200 rounded flex justify-between items-center">
+          <div className="flex-1">
+            <div className="font-medium text-red-900">€ {parseFloat(nc.importo).toFixed(2)}</div>
+            <div className="text-sm text-gray-600">{formatDate(nc.data)} - {nc.motivo}</div>
+          </div>
+          <button 
+            onClick={() => rimuoviNotaCredito(nc.id)}
+            disabled={saving}
+            className="text-red-600 hover:text-red-800 disabled:opacity-50 ml-3"
+          >
+            🗑️
+          </button>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
         <div className="flex gap-2 mt-6">
           <button 
             onClick={onClose}
