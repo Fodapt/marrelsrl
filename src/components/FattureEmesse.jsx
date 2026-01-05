@@ -573,15 +573,17 @@ const isNotaCredito = fattura.tipo === 'nota_credito';
                   <td className="px-3 py-2">{cliente?.ragione_sociale || '-'}</td>
                   <td className="px-3 py-2">{cantiere?.nome || '-'}</td>
                   <td className={`px-3 py-2 text-right ${isNotaCredito ? 'text-red-600' : ''}`}>
-  € {fattura.reverse_charge ? '0.00' : ((isNotaCredito ? -1 : 1) * calcolaIVA(fattura.imponibile, fattura.percentuale_iva)).toFixed(2)}
+  € {((isNotaCredito ? -1 : 1) * parseFloat(fattura.imponibile || 0)).toFixed(2)}
 </td>
 <td className={`px-3 py-2 text-right ${isNotaCredito ? 'text-red-600' : ''}`}>
   € {fattura.reverse_charge ? '0.00' : ((isNotaCredito ? -1 : 1) * calcolaIVA(fattura.imponibile, fattura.percentuale_iva)).toFixed(2)}
 </td>
 <td className={`px-3 py-2 text-right font-medium ${isNotaCredito ? 'text-red-600' : ''}`}>
-  € {(fattura.reverse_charge || fattura.versamento_iva_diretto 
-      ? (isNotaCredito ? -1 : 1) * parseFloat(fattura.imponibile) 
-      : totale
+  € {(fattura.versamento_iva_diretto 
+      ? ((isNotaCredito ? -1 : 1) * parseFloat(fattura.imponibile || 0))
+      : (fattura.reverse_charge 
+          ? ((isNotaCredito ? -1 : 1) * parseFloat(fattura.imponibile || 0))
+          : totale)
      ).toFixed(2)}
 </td>
 <td className={`px-3 py-2 text-right ${isNotaCredito ? 'text-red-600' : 'text-green-600'}`}>
