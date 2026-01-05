@@ -16,6 +16,7 @@ function SituazioneFornitori() {
   // Stati locali
   const [showOrdineForm, setShowOrdineForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [editingIdFatturaDiretta, setEditingIdFatturaDiretta] = useState(null);
   const [ordineFormData, setOrdineFormData] = useState({});
   const [showDettaglioModal, setShowDettaglioModal] = useState(false);
   const [ordineSelezionato, setOrdineSelezionato] = useState(null);
@@ -287,37 +288,43 @@ function SituazioneFornitori() {
 
   // ✅ SALVA FATTURA DIRETTA
   const handleSaveFatturaDiretta = async () => {
-    if (!fatturaDirettaFormData.numeroFattura || !fatturaDirettaFormData.dataFattura || !fatturaDirettaFormData.fornitoreId || !fatturaDirettaFormData.importo) {
-      return alert('⚠️ Compila tutti i campi obbligatori');
-    }
+  if (!fatturaDirettaFormData.numeroFattura || !fatturaDirettaFormData.dataFattura || !fatturaDirettaFormData.fornitoreId || !fatturaDirettaFormData.importo) {
+    return alert('⚠️ Compila tutti i campi obbligatori');
+  }
 
-    setSaving(true);
+  setSaving(true);
 
-    const dataForSupabase = {
-      numero_ordine: `DIRETTO-${fatturaDirettaFormData.numeroFattura}`,
-      data_ordine: fatturaDirettaFormData.dataFattura,
-      fornitore_id: fatturaDirettaFormData.fornitoreId,
-      cantiere_id: fatturaDirettaFormData.cantiereId || null,
-      importo: parseFloat(fatturaDirettaFormData.importo),
-      descrizione: fatturaDirettaFormData.descrizione || null,
-      tipo: 'fattura_diretta',
-      numero_fattura: fatturaDirettaFormData.numeroFattura,
-      data_fattura: fatturaDirettaFormData.dataFattura,
-      acconti_pagamento: []
-    };
-
-    const result = await addRecord('ordiniFornitori', dataForSupabase);
-
-    setSaving(false);
-
-    if (result.success) {
-      setShowFatturaDirettaForm(false);
-      setFatturaDirettaFormData({});
-      alert('✅ Fattura diretta aggiunta!');
-    } else {
-      alert('❌ Errore: ' + result.error);
-    }
+  const dataForSupabase = {
+    numero_ordine: `DIRETTO-${fatturaDirettaFormData.numeroFattura}`,
+    data_ordine: fatturaDirettaFormData.dataFattura,
+    fornitore_id: fatturaDirettaFormData.fornitoreId,
+    cantiere_id: fatturaDirettaFormData.cantiereId || null,
+    importo: parseFloat(fatturaDirettaFormData.importo),
+    descrizione: fatturaDirettaFormData.descrizione || null,
+    tipo: 'fattura_diretta',
+    numero_fattura: fatturaDirettaFormData.numeroFattura,
+    data_fattura: fatturaDirettaFormData.dataFattura,
+    acconti_pagamento: fatturaDirettaFormData.acconti_pagamento || []
   };
+
+  let result;
+  if (editingIdFatturaDiretta) {
+    result = await updateRecord('ordiniFornitori', editingIdFatturaDiretta, dataForSupabase);
+  } else {
+    result = await addRecord('ordiniFornitori', dataForSupabase);
+  }
+
+  setSaving(false);
+
+  if (result.success) {
+    setShowFatturaDirettaForm(false);
+    setFatturaDirettaFormData({});
+    setEditingIdFatturaDiretta(null);
+    alert(editingIdFatturaDiretta ? '✅ Fattura diretta aggiornata!' : '✅ Fattura diretta aggiunta!');
+  } else {
+    alert('❌ Errore: ' + result.error);
+  }
+};
 
   // ✅ ELIMINA ORDINE
   const handleDeleteOrdine = async (ordineId, numeroOrdine) => {
@@ -334,6 +341,20 @@ function SituazioneFornitori() {
 
   // ✅ MODIFICA ORDINE
   const handleEditOrdine = (ordine) => {
+  // Se è una fattura diretta, usa il form specifico
+  if (ordine.tipo === 'fattura_diretta') {
+    setFatturaDirettaFormData({
+      numeroFattura: ordine.numero_fattura || ordine.numero_ordine.replace('DIRETTO-', ''),
+      dataFattura: ordine.data_fattura || ordine.data_ordine,
+      fornitoreId: ordine.fornitore_id,
+      cantiereId: ordine.cantiere_id,
+      importo: ordine.importo,
+      descrizione: ordine.descrizione
+    });
+    setEditingIdFatturaDiretta(ordine.id);
+    setShowFatturaDirettaForm(true);
+  } else {
+    // Altrimenti usa il form ordini normale
     setOrdineFormData({
       numeroOrdine: ordine.numero_ordine,
       dataOrdine: ordine.data_ordine,
@@ -345,8 +366,9 @@ function SituazioneFornitori() {
     });
     setEditingId(ordine.id);
     setShowOrdineForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
 
  const exportPDF = (tipo = 'situazione') => {
   const ordini = filtroFornitore 
@@ -854,7 +876,9 @@ return (
       {/* Form Fattura Diretta */}
       {showFatturaDirettaForm && (
         <div className="bg-white p-6 rounded-lg shadow border-2 border-green-200">
-          <h3 className="text-lg font-semibold mb-4">➕ Nuova Fattura Diretta (senza ordine)</h3>
+          <h3 className="text-lg font-semibold mb-4">
+  {editingIdFatturaDiretta ? '✏️ Modifica' : '➕ Nuova'} Fattura Diretta (senza ordine)
+</h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Numero Fattura *</label>
