@@ -50,7 +50,9 @@ const [filtroTipo, setFiltroTipo] = useState('');
 };
 
 const calcolaImportoEffettivo = (fattura) => {
-  const totale = calcolaTotale(fattura.imponibile, fattura.percentuale_iva);
+  const totale = (fattura.reverse_charge || fattura.versamento_iva_diretto) 
+  ? parseFloat(fattura.imponibile || 0) 
+  : calcolaTotale(fattura.imponibile, fattura.percentuale_iva);
   return fattura.tipo === 'nota_credito' ? -totale : totale;
 };
 
@@ -60,8 +62,8 @@ const calcolaIncassato = (fattura) => {
 };
 
 const calcolaResiduo = (fattura) => {
-  // Se versamento IVA diretto, il residuo va calcolato solo sull'imponibile
-  if (fattura.versamento_iva_diretto) {
+  // Se versamento IVA diretto o reverse charge, il residuo va calcolato solo sull'imponibile
+  if (fattura.versamento_iva_diretto || fattura.reverse_charge) {
     const imponibile = parseFloat(fattura.imponibile || 0);
     const imponibileEffettivo = fattura.tipo === 'nota_credito' ? -imponibile : imponibile;
     return imponibileEffettivo - calcolaIncassato(fattura);
@@ -71,7 +73,6 @@ const calcolaResiduo = (fattura) => {
   const totale = calcolaImportoEffettivo(fattura);
   return totale - calcolaIncassato(fattura);
 };
-
   const fattureFiltrate = useMemo(() => {
   return fattureEmesse.filter(f => {
     if (filtroCliente && f.cliente_id !== filtroCliente) return false;
@@ -131,12 +132,13 @@ const calcolaResiduo = (fattura) => {
   cliente_id: formData.clienteId,
   cantiere_id: formData.cantiereId || null,
   imponibile: parseFloat(formData.imponibile),
-  percentuale_iva: parseFloat(formData.percentualeIVA || 22),
+  percentuale_iva: formData.reverseCharge ? 0 : parseFloat(formData.percentualeIVA || 22),
   tipo: formData.tipo || 'fattura',
   fattura_riferimento: formData.fatturaRiferimento || null,
   acconti: formData.acconti || [],
   note: formData.note || null,
-  versamento_iva_diretto: formData.versamentoIvaDiretto || false
+  versamento_iva_diretto: formData.versamentoIvaDiretto || false,
+  reverse_charge: formData.reverseCharge || false
 };
     let result;
     if (editingId) {
@@ -185,7 +187,8 @@ const calcolaResiduo = (fattura) => {
     note: fattura.note,
     tipo: fattura.tipo || 'fattura',
     fatturaRiferimento: fattura.fattura_riferimento,
-    versamentoIvaDiretto: fattura.versamento_iva_diretto || false
+    versamentoIvaDiretto: fattura.versamento_iva_diretto || false,
+    reverseCharge: fattura.reverse_charge || false
   });
     setEditingId(fattura.id);
     setShowForm(true);
@@ -417,16 +420,22 @@ const calcolaResiduo = (fattura) => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">IVA (%)</label>
-              <input 
-                type="number" 
-                step="0.01" 
-                className="border rounded px-3 py-2 w-full"
-                value={formData.percentualeIVA || 22}
-                onChange={(e) => setFormData({...formData, percentualeIVA: e.target.value})}
-                disabled={saving}
-              />
-            </div>
+  <label className="block text-sm font-medium mb-1">IVA (%)</label>
+  <input 
+    type="number" 
+    step="0.01" 
+    className="border rounded px-3 py-2 w-full bg-gray-50"
+    value={formData.reverseCharge ? 0 : (formData.percentualeIVA || 22)}
+    onChange={(e) => setFormData({...formData, percentualeIVA: e.target.value})}
+    disabled={saving || formData.reverseCharge}
+    readOnly={formData.reverseCharge}
+  />
+  {formData.reverseCharge && (
+    <p className="text-xs text-orange-700 mt-1">
+      IVA impostata a 0% per Reverse Charge
+    </p>
+  )}
+</div>
 
             <div className="col-span-2 bg-blue-50 p-3 rounded border border-blue-200">
   <label className="flex items-center gap-2 cursor-pointer">
@@ -447,23 +456,46 @@ const calcolaResiduo = (fattura) => {
     </p>
   )}
 </div>
+<div className="col-span-2 bg-orange-50 p-3 rounded border border-orange-200">
+  <label className="flex items-center gap-2 cursor-pointer">
+    <input 
+      type="checkbox" 
+      className="w-4 h-4"
+      checked={formData.reverseCharge || false}
+      onChange={(e) => setFormData({
+        ...formData, 
+        reverseCharge: e.target.checked,
+        percentualeIVA: e.target.checked ? 0 : (formData.percentualeIVA || 22)
+      })}
+      disabled={saving}
+    />
+    <span className="text-sm font-medium">
+      🔄 Reverse Charge (IVA a carico del cliente - IVA 0%)
+    </span>
+  </label>
+  {formData.reverseCharge && (
+    <p className="text-xs text-orange-700 mt-1 ml-6">
+      ⚠️ L'IVA è automaticamente impostata a 0%. Il cliente applicherà l'IVA autonomamente.
+    </p>
+  )}
+</div>
 
             
 
             <div className="col-span-2 bg-gray-50 p-4 rounded">
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
-                  <div className="text-sm text-gray-600">IVA</div>
-                  <div className="text-xl font-bold">
-                    € {calcolaIVA(formData.imponibile, formData.percentualeIVA).toFixed(2)}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600">Totale</div>
-<div className={`text-2xl font-bold ${formData.tipo === 'nota_credito' ? 'text-red-600' : 'text-blue-600'}`}>
-  € {(formData.tipo === 'nota_credito' ? -1 : 1) * calcolaTotale(formData.imponibile, formData.percentualeIVA).toFixed(2)}
+  <div className="text-sm text-gray-600">IVA</div>
+  <div className="text-xl font-bold">
+    € {formData.reverseCharge ? '0.00' : calcolaIVA(formData.imponibile, formData.percentualeIVA).toFixed(2)}
+  </div>
 </div>
-                </div>
+                <div>
+  <div className="text-sm text-gray-600">Totale</div>
+  <div className={`text-2xl font-bold ${formData.tipo === 'nota_credito' ? 'text-red-600' : 'text-blue-600'}`}>
+    € {(formData.tipo === 'nota_credito' ? -1 : 1) * (formData.reverseCharge ? parseFloat(formData.imponibile || 0) : calcolaTotale(formData.imponibile, formData.percentualeIVA)).toFixed(2)}
+  </div>
+</div>
                 <div>
                   <div className="text-sm text-gray-600">Residuo</div>
                   <div className="text-xl font-bold text-orange-600">
@@ -541,13 +573,16 @@ const isNotaCredito = fattura.tipo === 'nota_credito';
                   <td className="px-3 py-2">{cliente?.ragione_sociale || '-'}</td>
                   <td className="px-3 py-2">{cantiere?.nome || '-'}</td>
                   <td className={`px-3 py-2 text-right ${isNotaCredito ? 'text-red-600' : ''}`}>
-  € {(isNotaCredito ? -1 : 1) * parseFloat(fattura.imponibile).toFixed(2)}
+  € {fattura.reverse_charge ? '0.00' : ((isNotaCredito ? -1 : 1) * calcolaIVA(fattura.imponibile, fattura.percentuale_iva)).toFixed(2)}
 </td>
 <td className={`px-3 py-2 text-right ${isNotaCredito ? 'text-red-600' : ''}`}>
-  € {(isNotaCredito ? -1 : 1) * calcolaIVA(fattura.imponibile, fattura.percentuale_iva).toFixed(2)}
+  € {fattura.reverse_charge ? '0.00' : ((isNotaCredito ? -1 : 1) * calcolaIVA(fattura.imponibile, fattura.percentuale_iva)).toFixed(2)}
 </td>
 <td className={`px-3 py-2 text-right font-medium ${isNotaCredito ? 'text-red-600' : ''}`}>
-  € {totale.toFixed(2)}
+  € {(fattura.reverse_charge || fattura.versamento_iva_diretto 
+      ? (isNotaCredito ? -1 : 1) * parseFloat(fattura.imponibile) 
+      : totale
+     ).toFixed(2)}
 </td>
 <td className={`px-3 py-2 text-right ${isNotaCredito ? 'text-red-600' : 'text-green-600'}`}>
   € {incassato.toFixed(2)}
@@ -566,6 +601,11 @@ const isNotaCredito = fattura.tipo === 'nota_credito';
     {fattura.versamento_iva_diretto && (
       <span className="inline-block bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs">
         🏦 IVA Diretta
+      </span>
+    )}
+    {fattura.reverse_charge && (
+      <span className="inline-block bg-orange-100 text-orange-700 px-2 py-0.5 rounded text-xs">
+        🔄 Reverse Charge
       </span>
     )}
   </div>
@@ -634,7 +674,7 @@ function AccontiModal({ fattura, onClose, aggiungiAcconto, rimuoviAcconto, forma
   const [importoAcconto, setImportoAcconto] = useState('');
   const [dataIncasso, setDataIncasso] = useState(new Date().toISOString().split('T')[0]);
 
-  const totale = calcolaTotale(fattura.imponibile, fattura.percentuale_iva);
+  const totale = (fattura.reverse_charge || fattura.versamento_iva_diretto) ? parseFloat(fattura.imponibile || 0) : calcolaTotale(fattura.imponibile, fattura.percentuale_iva);
   const incassato = calcolaIncassato(fattura);
   const residuo = totale - incassato;
 
