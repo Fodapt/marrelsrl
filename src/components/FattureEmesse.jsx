@@ -60,6 +60,14 @@ const calcolaIncassato = (fattura) => {
 };
 
 const calcolaResiduo = (fattura) => {
+  // Se versamento IVA diretto, il residuo va calcolato solo sull'imponibile
+  if (fattura.versamento_iva_diretto) {
+    const imponibile = parseFloat(fattura.imponibile || 0);
+    const imponibileEffettivo = fattura.tipo === 'nota_credito' ? -imponibile : imponibile;
+    return imponibileEffettivo - calcolaIncassato(fattura);
+  }
+  
+  // Altrimenti calcolo normale con IVA inclusa
   const totale = calcolaImportoEffettivo(fattura);
   return totale - calcolaIncassato(fattura);
 };
@@ -127,7 +135,8 @@ const calcolaResiduo = (fattura) => {
   tipo: formData.tipo || 'fattura',
   fattura_riferimento: formData.fatturaRiferimento || null,
   acconti: formData.acconti || [],
-  note: formData.note || null
+  note: formData.note || null,
+  versamento_iva_diretto: formData.versamentoIvaDiretto || false
 };
     let result;
     if (editingId) {
@@ -175,7 +184,8 @@ const calcolaResiduo = (fattura) => {
     acconti: fattura.acconti || [],
     note: fattura.note,
     tipo: fattura.tipo || 'fattura',
-    fatturaRiferimento: fattura.fattura_riferimento
+    fatturaRiferimento: fattura.fattura_riferimento,
+    versamentoIvaDiretto: fattura.versamento_iva_diretto || false
   });
     setEditingId(fattura.id);
     setShowForm(true);
@@ -418,6 +428,26 @@ const calcolaResiduo = (fattura) => {
               />
             </div>
 
+            <div className="col-span-2 bg-blue-50 p-3 rounded border border-blue-200">
+  <label className="flex items-center gap-2 cursor-pointer">
+    <input 
+      type="checkbox" 
+      className="w-4 h-4"
+      checked={formData.versamentoIvaDiretto || false}
+      onChange={(e) => setFormData({...formData, versamentoIvaDiretto: e.target.checked})}
+      disabled={saving}
+    />
+    <span className="text-sm font-medium">
+      🏦 Versamento IVA diretto (cliente paga solo imponibile, IVA versata allo stato)
+    </span>
+  </label>
+  {formData.versamentoIvaDiretto && (
+    <p className="text-xs text-blue-700 mt-1 ml-6">
+      ⚠️ Con questa opzione, quando l'imponibile è pagato, la fattura risulterà saldata
+    </p>
+  )}
+</div>
+
             
 
             <div className="col-span-2 bg-gray-50 p-4 rounded">
@@ -523,11 +553,22 @@ const isNotaCredito = fattura.tipo === 'nota_credito';
   € {incassato.toFixed(2)}
 </td>
 <td className="px-3 py-2">
-  {isNotaCredito ? (
-    <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded">Nota Credito</span>
-  ) : (
-    <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">Fattura</span>
-  )}
+  <div className="flex flex-col gap-1">
+    {isNotaCredito ? (
+      <span className="inline-block bg-red-100 text-red-700 px-2 py-0.5 rounded text-xs">
+        Nota Credito
+      </span>
+    ) : (
+      <span className="inline-block bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs">
+        Fattura
+      </span>
+    )}
+    {fattura.versamento_iva_diretto && (
+      <span className="inline-block bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs">
+        🏦 IVA Diretta
+      </span>
+    )}
+  </div>
 </td>
 <td className={`px-3 py-2 text-right font-medium ${isNotaCredito ? 'text-red-600' : 'text-orange-600'}`}>
   € {residuo.toFixed(2)}
