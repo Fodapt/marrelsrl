@@ -50,27 +50,40 @@ function SituazioneFornitori() {
     return date.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
-  const calcolaAccontiFatturaDiretta = (ordine) => {
-  if (!ordine || ordine.tipo !== 'fattura_diretta') return { totale: 0, pagato: 0, residuo: 0, acconti: [], noteCredito: [], totaleNoteCredito: 0 };
+const calcolaAccontiFatturaDiretta = (ordine) => {
+  if (!ordine || ordine.tipo !== 'fattura_diretta') return { 
+    totale: 0, 
+    pagato: 0, 
+    residuo: 0, 
+    acconti: [], 
+    noteCredito: [], 
+    buoni: [],
+    totaleNoteCredito: 0,
+    totaleBuoni: 0
+  };
   
   const acconti = ordine.acconti_pagamento || [];
   const noteCredito = ordine.note_credito || [];
+  const buoni = ordine.buoni || [];
   
   const totalePagato = acconti.reduce((sum, acc) => sum + parseFloat(acc.importo || 0), 0);
   const totaleNoteCredito = noteCredito.reduce((sum, nc) => sum + parseFloat(nc.importo || 0), 0);
+  const totaleBuoni = buoni.reduce((sum, b) => sum + parseFloat(b.importo || 0), 0);
   
   const importoOriginale = parseFloat(ordine.importo || 0);
-  const totaleEffettivo = importoOriginale - totaleNoteCredito;
+  const totaleEffettivo = importoOriginale - totaleNoteCredito - totaleBuoni;
   const residuo = totaleEffettivo - totalePagato;
   
   return { 
     totale: importoOriginale, 
     totaleEffettivo, 
     totaleNoteCredito,
+    totaleBuoni,
     pagato: totalePagato, 
     residuo, 
     acconti,
-    noteCredito 
+    noteCredito,
+    buoni
   };
 };
 
@@ -1010,29 +1023,41 @@ return (
       const hasNoteCredito = ordine.note_credito && ordine.note_credito.length > 0;
       
       if (!hasNoteCredito) {
-        return (
-          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-            Fattura Diretta
-          </span>
-        );
-      }
+  return (
+    <>
+      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+        Fattura Diretta
+      </span>
+      {ordine.buoni && ordine.buoni.length > 0 && (
+        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+          Con Buono
+        </span>
+      )}
+    </>
+  );
+}
       
       const totaleNoteCredito = ordine.note_credito.reduce((sum, nc) => sum + parseFloat(nc.importo || 0), 0);
       const importoFattura = parseFloat(ordine.importo || 0);
       const isAnnullamento = totaleNoteCredito >= importoFattura;
       
       return (
-        <>
-          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-            Fattura Diretta
-          </span>
-          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-            isAnnullamento ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
-          }`}>
-            📋 {isAnnullamento ? 'Annullata' : 'Nota Credito'} (€ {totaleNoteCredito.toFixed(2)})
-          </span>
-        </>
-      );
+  <>
+    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+      Fattura Diretta
+    </span>
+    {ordine.buoni && ordine.buoni.length > 0 && (
+      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+        Con Buono
+      </span>
+    )}
+    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+      isAnnullamento ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+    }`}>
+      📋 {isAnnullamento ? 'Annullata' : 'Nota Credito'} (€ {totaleNoteCredito.toFixed(2)})
+    </span>
+  </>
+);
     })()
   ) : (
     <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
@@ -1692,6 +1717,10 @@ function GestioneAccontiModal({
   const [importoNotaCredito, setImportoNotaCredito] = useState('');
   const [motivoNotaCredito, setMotivoNotaCredito] = useState('');
   const [showNoteCreditoSection, setShowNoteCreditoSection] = useState(false);
+  const [dataBuono, setDataBuono] = useState(new Date().toISOString().split('T')[0]);
+  const [importoBuono, setImportoBuono] = useState('');
+  const [descrizioneBuono, setDescrizioneBuono] = useState('');
+  const [showBuoniSection, setShowBuoniSection] = useState(false);
 
   const fornitore = fornitori.find(f => f.id === fattura.fornitore_id);
   const cantiere = cantieri.find(c => c.id === fattura.cantiere_id);
@@ -1798,7 +1827,57 @@ function GestioneAccontiModal({
       alert('❌ Errore: ' + result.error);
     }
   };
+const aggiungiBuono = async () => {
+  const importo = parseFloat(importoBuono);
+  if (!importo || importo <= 0) {
+    return alert('⚠️ Inserisci un importo valido');
+  }
 
+  if (!descrizioneBuono.trim()) {
+    return alert('⚠️ Inserisci una descrizione per il buono');
+  }
+
+  setSaving(true);
+
+  const nuovoBuono = {
+    id: Date.now().toString(),
+    data: dataBuono,
+    importo,
+    descrizione: descrizioneBuono
+  };
+
+  const nuoviBuoni = [...(fattura.buoni || []), nuovoBuono];
+  const result = await updateRecord('ordiniFornitori', fattura.id, { buoni: nuoviBuoni });
+
+  setSaving(false);
+
+  if (result.success) {
+    setImportoBuono('');
+    setDescrizioneBuono('');
+    setDataBuono(new Date().toISOString().split('T')[0]);
+    setShowBuoniSection(false);
+    alert('✅ Buono registrato!');
+    onClose();
+  } else {
+    alert('❌ Errore: ' + result.error);
+  }
+};
+
+const rimuoviBuono = async (buonoId) => {
+  if (!confirm('❌ Eliminare questo buono?')) return;
+
+  setSaving(true);
+  const nuoviBuoni = (fattura.buoni || []).filter(b => b.id !== buonoId);
+  const result = await updateRecord('ordiniFornitori', fattura.id, { buoni: nuoviBuoni });
+  setSaving(false);
+
+  if (result.success) {
+    alert('✅ Buono eliminato!');
+    onClose();
+  } else {
+    alert('❌ Errore: ' + result.error);
+  }
+};
   
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -1824,7 +1903,7 @@ function GestioneAccontiModal({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
   <div className="bg-blue-50 p-3 rounded border border-blue-200">
     <div className="text-xs text-blue-700 mb-1">Totale Originale</div>
     <div className="text-lg font-bold text-blue-900">€ {accInfo.totale.toFixed(2)}</div>
@@ -1832,6 +1911,10 @@ function GestioneAccontiModal({
   <div className="bg-red-50 p-3 rounded border border-red-200">
     <div className="text-xs text-red-700 mb-1">Note di Credito</div>
     <div className="text-lg font-bold text-red-900">- € {accInfo.totaleNoteCredito.toFixed(2)}</div>
+  </div>
+  <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
+    <div className="text-xs text-yellow-700 mb-1">Buoni (Sconti)</div>
+    <div className="text-lg font-bold text-yellow-900">- € {accInfo.totaleBuoni.toFixed(2)}</div>
   </div>
   <div className="bg-purple-50 p-3 rounded border border-purple-200">
     <div className="text-xs text-purple-700 mb-1">Totale Effettivo</div>
@@ -2015,6 +2098,86 @@ function GestioneAccontiModal({
           </div>
           <button 
             onClick={() => rimuoviNotaCredito(nc.id)}
+            disabled={saving}
+            className="text-red-600 hover:text-red-800 disabled:opacity-50 ml-3"
+          >
+            🗑️
+          </button>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+{/* Sezione Buoni (Sconti) */}
+<div className="mb-6">
+  <div className="flex justify-between items-center mb-3">
+    <h4 className="font-semibold text-yellow-900">🎫 Buoni / Sconti ({(accInfo.buoni || []).length})</h4>
+    <button 
+      onClick={() => setShowBuoniSection(!showBuoniSection)}
+      className="bg-yellow-600 text-white px-3 py-1 rounded text-sm hover:bg-yellow-700"
+    >
+      {showBuoniSection ? '✕ Chiudi' : '➕ Aggiungi Buono'}
+    </button>
+  </div>
+
+  {showBuoniSection && (
+    <div className="bg-yellow-50 p-4 rounded border border-yellow-200 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-sm font-medium mb-1">Data Buono</label>
+          <input 
+            type="date"
+            className="border rounded px-3 py-2 w-full"
+            value={dataBuono}
+            onChange={(e) => setDataBuono(e.target.value)}
+            disabled={saving}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Importo (€)</label>
+          <input 
+            type="number"
+            step="0.01"
+            className="border rounded px-3 py-2 w-full"
+            placeholder="0.00"
+            value={importoBuono}
+            onChange={(e) => setImportoBuono(e.target.value)}
+            disabled={saving}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Descrizione</label>
+          <input 
+            type="text"
+            className="border rounded px-3 py-2 w-full"
+            placeholder="es: Sconto promozionale..."
+            value={descrizioneBuono}
+            onChange={(e) => setDescrizioneBuono(e.target.value)}
+            disabled={saving}
+          />
+        </div>
+      </div>
+      <button 
+        onClick={aggiungiBuono}
+        disabled={saving}
+        className="mt-3 bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 disabled:opacity-50 w-full"
+      >
+        {saving ? '⏳ Salvataggio...' : '✓ Aggiungi Buono'}
+      </button>
+    </div>
+  )}
+
+  {/* Lista Buoni */}
+  {(accInfo.buoni || []).length > 0 && (
+    <div className="space-y-2">
+      {accInfo.buoni.map(buono => (
+        <div key={buono.id} className="p-3 bg-yellow-50 border border-yellow-200 rounded flex justify-between items-center">
+          <div className="flex-1">
+            <div className="font-medium text-yellow-900">€ {parseFloat(buono.importo).toFixed(2)}</div>
+            <div className="text-sm text-gray-600">{formatDate(buono.data)} - {buono.descrizione}</div>
+          </div>
+          <button 
+            onClick={() => rimuoviBuono(buono.id)}
             disabled={saving}
             className="text-red-600 hover:text-red-800 disabled:opacity-50 ml-3"
           >
