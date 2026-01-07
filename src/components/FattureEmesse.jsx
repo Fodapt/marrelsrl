@@ -235,6 +235,517 @@ const calcolaResiduo = (fattura) => {
     }
   };
 
+
+  // ✅ EXPORT PDF CON TOTALI PER CLIENTE E CANTIERE
+  const exportPDF = () => {
+    const fatture = fattureFiltrate;
+
+    if (fatture.length === 0) {
+      alert('✅ Nessuna fattura da esportare!');
+      return;
+    }
+
+    // ========== CALCOLA TOTALI GENERALI ==========
+    let totaleImponibili = 0;
+    let totaleIVA = 0;
+    let totaleImponibileConIVA = 0;
+    let totaleIncassatoGlobale = 0;
+
+    // ========== RAGGRUPPA PER CLIENTE ==========
+    const fatturePerCliente = {};
+    fatture.forEach(fattura => {
+      const clienteId = fattura.cliente_id;
+      if (!fatturePerCliente[clienteId]) {
+        fatturePerCliente[clienteId] = [];
+      }
+      fatturePerCliente[clienteId].push(fattura);
+    });
+
+    // ========== RAGGRUPPA PER CANTIERE ==========
+    const fatturePerCantiere = {};
+    fatture.forEach(fattura => {
+      const cantiereId = fattura.cantiere_id || 'nessuno';
+      if (!fatturePerCantiere[cantiereId]) {
+        fatturePerCantiere[cantiereId] = [];
+      }
+      fatturePerCantiere[cantiereId].push(fattura);
+    });
+
+    // ========== GENERA RIGHE HTML ==========
+    const righeHTML = fatture.map(fattura => {
+      const cliente = clienti.find(c => c.id === fattura.cliente_id);
+      const cantiere = cantieri.find(c => c.id === fattura.cantiere_id);
+      const isNotaCredito = fattura.tipo === 'nota_credito';
+      const moltiplicatore = isNotaCredito ? -1 : 1;
+
+      const imponibile = parseFloat(fattura.imponibile || 0) * moltiplicatore;
+      const iva = fattura.reverse_charge ? 0 : calcolaIVA(fattura.imponibile, fattura.percentuale_iva) * moltiplicatore;
+      const imponibileConIVA = imponibile + iva;
+      const totaleFattura = (fattura.reverse_charge || fattura.versamento_iva_diretto) 
+        ? imponibile 
+        : imponibileConIVA;
+      const incassato = calcolaIncassato(fattura);
+
+      if (!isNotaCredito) {
+        totaleImponibili += imponibile;
+        totaleIVA += iva;
+        totaleImponibileConIVA += imponibileConIVA;
+      }
+      totaleIncassatoGlobale += incassato;
+
+      const styleClass = isNotaCredito ? 'color: #dc2626; font-weight: bold;' : '';
+      const bgClass = isNotaCredito ? 'background-color: #fee2e2;' : '';
+
+      return `
+        <tr style="${bgClass}">
+          <td style="border: 1px solid #ddd; padding: 8px;">${formatDate(fattura.data_fattura)}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; font-weight: 600;">${fattura.numero_fattura}</td>
+          <td style="border: 1px solid #ddd; padding: 8px;">${cliente?.ragione_sociale || '-'}</td>
+          <td style="border: 1px solid #ddd; padding: 8px;">${cantiere?.nome || '-'}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">
+            ${isNotaCredito ? '<span style="background-color: #dc2626; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">NC</span>' : 
+              fattura.versamento_iva_diretto ? '<span style="background-color: #9333ea; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">IVA DIR</span>' :
+              fattura.reverse_charge ? '<span style="background-color: #f97316; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">RC</span>' : 
+              '<span style="background-color: #2563eb; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">FATT</span>'}
+          </td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; ${styleClass}">€ ${imponibile.toFixed(2)}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; ${styleClass}">€ ${iva.toFixed(2)}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; ${styleClass}">€ ${imponibileConIVA.toFixed(2)}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600; ${styleClass}">€ ${totaleFattura.toFixed(2)}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; color: #16a34a; font-weight: 600;">€ ${incassato.toFixed(2)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    // ========== GENERA TOTALI PER CLIENTE ==========
+    const totaliClientiHTML = Object.keys(fatturePerCliente).map(clienteId => {
+      const fattureCliente = fatturePerCliente[clienteId];
+      const cliente = clienti.find(c => c.id === clienteId);
+      
+      let totImponibile = 0;
+      let totIVA = 0;
+      let totImponibileIVA = 0;
+      let totIncassato = 0;
+
+      fattureCliente.forEach(f => {
+        const isNC = f.tipo === 'nota_credito';
+        const molt = isNC ? -1 : 1;
+        const imp = parseFloat(f.imponibile || 0) * molt;
+        const iva = f.reverse_charge ? 0 : calcolaIVA(f.imponibile, f.percentuale_iva) * molt;
+        
+        if (!isNC) {
+          totImponibile += imp;
+          totIVA += iva;
+          totImponibileIVA += imp + iva;
+        }
+        totIncassato += calcolaIncassato(f);
+      });
+
+      return `
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 8px; font-weight: 600;">${cliente?.ragione_sociale || 'Cliente Sconosciuto'}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${fattureCliente.length}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600;">€ ${totImponibile.toFixed(2)}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600;">€ ${totIVA.toFixed(2)}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600;">€ ${totImponibileIVA.toFixed(2)}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600; color: #16a34a;">€ ${totIncassato.toFixed(2)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    // ========== GENERA TOTALI PER CANTIERE ==========
+    const totaliCantieriHTML = Object.keys(fatturePerCantiere).map(cantiereId => {
+      const fattureCantiere = fatturePerCantiere[cantiereId];
+      const cantiere = cantiereId === 'nessuno' ? null : cantieri.find(c => c.id === cantiereId);
+      
+      let totImponibile = 0;
+      let totIVA = 0;
+      let totImponibileIVA = 0;
+      let totIncassato = 0;
+
+      fattureCantiere.forEach(f => {
+        const isNC = f.tipo === 'nota_credito';
+        const molt = isNC ? -1 : 1;
+        const imp = parseFloat(f.imponibile || 0) * molt;
+        const iva = f.reverse_charge ? 0 : calcolaIVA(f.imponibile, f.percentuale_iva) * molt;
+        
+        if (!isNC) {
+          totImponibile += imp;
+          totIVA += iva;
+          totImponibileIVA += imp + iva;
+        }
+        totIncassato += calcolaIncassato(f);
+      });
+
+      return `
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 8px; font-weight: 600;">${cantiere?.nome || 'Nessun Cantiere'}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${fattureCantiere.length}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600;">€ ${totImponibile.toFixed(2)}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600;">€ ${totIVA.toFixed(2)}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600;">€ ${totImponibileIVA.toFixed(2)}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600; color: #16a34a;">€ ${totIncassato.toFixed(2)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const dataStampa = new Date().toLocaleDateString('it-IT', { 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Fatture Emesse - Marrel S.r.l.</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body { 
+      font-family: Arial, Helvetica, sans-serif; 
+      padding: 20px;
+      font-size: 11px;
+      line-height: 1.4;
+      color: #000;
+      background: white;
+    }
+    
+    @media print {
+      body { 
+        margin: 0; 
+        padding: 10px;
+      }
+      
+      @page { 
+        size: landscape; 
+        margin: 0.5cm;
+      }
+      
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+      
+      table, th, td {
+        border: 1px solid #000 !important;
+      }
+      
+      .totali, .riepilogo-section {
+        background-color: #f0f9ff !important;
+        border: 2px solid #2563eb !important;
+      }
+      
+      .totale-item {
+        background-color: white !important;
+        border: 1px solid #bfdbfe !important;
+      }
+      
+      tr, .totali, .totale-item, .riepilogo-section {
+        page-break-inside: avoid;
+      }
+      
+      button, .no-print {
+        display: none !important;
+      }
+    }
+    
+    h1 { 
+      text-align: center; 
+      color: #1e40af; 
+      margin-bottom: 8px;
+      font-size: 22px;
+      font-weight: bold;
+    }
+    
+    h2 {
+      color: #1e40af;
+      margin: 20px 0 12px 0;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    
+    .info { 
+      text-align: center; 
+      color: #666; 
+      margin-bottom: 15px;
+      font-size: 10px;
+    }
+    
+    table { 
+      width: 100%; 
+      border-collapse: collapse; 
+      margin-top: 15px;
+      font-size: 10px;
+    }
+    
+    th { 
+      background-color: #2563eb; 
+      color: white; 
+      padding: 8px 6px; 
+      text-align: left; 
+      border: 1px solid #1e40af;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    
+    td { 
+      border: 1px solid #ddd; 
+      padding: 6px;
+      font-size: 10px;
+    }
+    
+    tr:nth-child(even) { 
+      background-color: #f9fafb; 
+    }
+    
+    .totali {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f0f9ff;
+      border: 2px solid #2563eb;
+      border-radius: 6px;
+      page-break-inside: avoid;
+    }
+    
+    .totali h2 {
+      color: #1e40af;
+      margin-bottom: 12px;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    
+    .totali-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    
+    .totale-item {
+      background-color: white;
+      padding: 12px;
+      border-radius: 4px;
+      border: 1px solid #bfdbfe;
+    }
+    
+    .totale-label {
+      font-size: 11px;
+      color: #1e40af;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+    
+    .totale-valore {
+      font-size: 18px;
+      font-weight: bold;
+      color: #1e3a8a;
+    }
+    
+    .riepilogo-section {
+      margin-top: 30px;
+      padding: 20px;
+      background-color: #f0fdf4;
+      border: 2px solid #10b981;
+      border-radius: 6px;
+      page-break-inside: avoid;
+    }
+    
+    .riepilogo-section h2 {
+      color: #065f46;
+      margin-bottom: 15px;
+    }
+    
+    .riepilogo-section table {
+      margin-top: 10px;
+      background-color: white;
+    }
+    
+    .riepilogo-section th {
+      background-color: #10b981;
+      color: white;
+    }
+    
+    .legenda {
+      margin-top: 20px;
+      text-align: center;
+      color: #666;
+      font-size: 9px;
+      padding: 10px;
+      background-color: #f9fafb;
+      border-radius: 4px;
+      page-break-inside: avoid;
+    }
+    
+    .legenda strong {
+      color: #000;
+      font-size: 10px;
+    }
+    
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin: 0 4px;
+      font-weight: 600;
+      font-size: 9px;
+    }
+    
+    .button-container {
+      text-align: center;
+      margin: 20px 0;
+      padding: 15px;
+      background-color: #f0f9ff;
+      border-radius: 6px;
+    }
+    
+    button {
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      margin: 0 10px;
+    }
+    
+    button:hover {
+      background-color: #1e40af;
+    }
+    
+    button.secondary {
+      background-color: #10b981;
+    }
+    
+    button.secondary:hover {
+      background-color: #059669;
+    }
+  </style>
+</head>
+<body>
+  <h1>📄 Fatture Emesse - Marrel S.r.l.</h1>
+  <p class="info">Report generato il: ${dataStampa}</p>
+  
+  <div class="button-container no-print">
+    <button onclick="window.print()">🖨️ Stampa / Salva PDF</button>
+    <button class="secondary" onclick="window.close()">✕ Chiudi</button>
+  </div>
+  
+  <table>
+    <thead>
+      <tr>
+        <th>Data</th>
+        <th>Numero</th>
+        <th>Cliente</th>
+        <th>Cantiere</th>
+        <th style="text-align: center;">Tipo</th>
+        <th style="text-align: right;">Imponibile</th>
+        <th style="text-align: right;">IVA</th>
+        <th style="text-align: right;">Tot. Imp.+IVA</th>
+        <th style="text-align: right;">Tot. Fattura</th>
+        <th style="text-align: right;">Incassato</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${righeHTML}
+    </tbody>
+  </table>
+
+  <div class="totali">
+    <h2>📊 Riepilogo Totali Generali</h2>
+    <div class="totali-grid">
+      <div class="totale-item">
+        <div class="totale-label">Totale Imponibili</div>
+        <div class="totale-valore">€ ${totaleImponibili.toFixed(2)}</div>
+      </div>
+      <div class="totale-item">
+        <div class="totale-label">Totale IVA</div>
+        <div class="totale-valore">€ ${totaleIVA.toFixed(2)}</div>
+      </div>
+      <div class="totale-item">
+        <div class="totale-label">Totale Imponibile + IVA</div>
+        <div class="totale-valore">€ ${totaleImponibileConIVA.toFixed(2)}</div>
+      </div>
+      <div class="totale-item">
+        <div class="totale-label">Totale Incassato</div>
+        <div class="totale-valore">€ ${totaleIncassatoGlobale.toFixed(2)}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="riepilogo-section">
+    <h2>👔 Totali per Cliente</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Cliente</th>
+          <th style="text-align: center;">N° Fatture</th>
+          <th style="text-align: right;">Imponibile</th>
+          <th style="text-align: right;">IVA</th>
+          <th style="text-align: right;">Imp. + IVA</th>
+          <th style="text-align: right;">Incassato</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${totaliClientiHTML}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="riepilogo-section">
+    <h2>🏗️ Totali per Cantiere</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Cantiere</th>
+          <th style="text-align: center;">N° Fatture</th>
+          <th style="text-align: right;">Imponibile</th>
+          <th style="text-align: right;">IVA</th>
+          <th style="text-align: right;">Imp. + IVA</th>
+          <th style="text-align: right;">Incassato</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${totaliCantieriHTML}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="legenda">
+    <p><strong>Legenda:</strong></p>
+    <p style="margin: 8px 0;">
+      <span class="badge" style="background-color: #2563eb; color: white;">FATT</span> = Fattura Normale |
+      <span class="badge" style="background-color: #9333ea; color: white;">IVA DIR</span> = IVA Diretta |
+      <span class="badge" style="background-color: #f97316; color: white;">RC</span> = Reverse Charge |
+      <span class="badge" style="background-color: #dc2626; color: white;">NC</span> = Nota di Credito
+    </p>
+    <p style="margin-top: 8px; font-size: 8px; line-height: 1.5;">
+      <strong>Nota:</strong> Per fatture con IVA Diretta o Reverse Charge, la colonna "Tot. Fattura" mostra solo l'imponibile.<br/>
+      La colonna "Tot. Imp.+IVA" mostra sempre il totale teorico con IVA, anche se non addebitata al cliente.
+    </p>
+  </div>
+</body>
+</html>`;
+
+    const nuovaFinestra = window.open('', '_blank');
+    if (nuovaFinestra) {
+      nuovaFinestra.document.write(html);
+      nuovaFinestra.document.close();
+    } else {
+      alert('⚠️ Popup bloccato! Abilita i popup per questo sito.');
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Header con filtri */}
@@ -250,6 +761,15 @@ const calcolaResiduo = (fattura) => {
   >
     ➕ Nuova Fattura
   </button>
+
+  <button 
+    onClick={exportPDF}
+    className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 whitespace-nowrap"
+    disabled={fattureFiltrate.length === 0}
+  >
+    📄 Export PDF
+  </button>
+
 
   <select 
     className="border rounded px-3 py-2 flex-1 min-w-[200px]"

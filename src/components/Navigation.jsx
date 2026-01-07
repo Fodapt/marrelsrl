@@ -182,7 +182,7 @@ function Navigation({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
 
       {/* Versione in basso */}
       <div className="mt-auto p-4 border-t border-gray-200 bg-gray-50">
-        <p className="text-xs text-gray-500 text-center">versione 4.2</p>
+        <p className="text-xs text-gray-500 text-center">versione 4.3</p>
         <p className="text-xs text-gray-400 text-center">{profile?.azienda}</p>
       </div>
     </aside>

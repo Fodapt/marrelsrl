@@ -211,7 +211,7 @@ export const DataProvider = ({ children }) => {
     if (existing) {
       return await updateRecord('settings', existing.id, { valore });
     } else {
-      return await addRecord('settings', { chiave, valore, azienda_id: profile.azienda_id });
+      return await addRecord('settings', { chiave, valore, azienda: profile.azienda });
     }
   };
 

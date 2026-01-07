@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
 
 function Contabilita() {
@@ -66,18 +66,30 @@ const commissioniDefault = {
   f23: { tipo: 'fisso', valore: 0 }
 };
 
-// ✅ Carica commissioni da Supabase
-const commissioniSalvate = getSetting('commissioni', null);
-const [commissioni, setCommissioni] = useState(() => {
-  if (commissioniSalvate) {
+// ✅ Stato commissioni
+const [commissioni, setCommissioni] = useState(commissioniDefault);
+const [commissioniCaricate, setCommissioniCaricate] = useState(false);
+
+// ✅ Sincronizza commissioni da Supabase
+useEffect(() => {
+  const commissioniSalvate = getSetting('commissioni', null);
+  
+  if (commissioniSalvate && !commissioniCaricate) {
     try {
-      return JSON.parse(commissioniSalvate);
-    } catch {
-      return commissioniDefault;
+      const parsed = JSON.parse(commissioniSalvate);
+      setCommissioni(parsed);
+      setCommissioniCaricate(true);
+      console.log('✅ Commissioni caricate:', parsed);
+    } catch (error) {
+      console.error('❌ Errore commissioni:', error);
+      setCommissioni(commissioniDefault);
+      setCommissioniCaricate(true);
     }
+  } else if (!commissioniSalvate && !commissioniCaricate) {
+    setCommissioni(commissioniDefault);
+    setCommissioniCaricate(true);
   }
-  return commissioniDefault;
-});
+}, [getSetting, commissioniCaricate]);
 
   const tipologieMovimento = [
     { value: 'bonifico', label: 'Bonifico' },
@@ -131,8 +143,14 @@ const [commissioni, setCommissioni] = useState(() => {
 
   // ✅ SALVA su Supabase
   const handleSave = async () => {
-    if (!formData.fornitoreId || !formData.causale) {
-      alert('⚠️ Fornitore e causale sono obbligatori!');
+    // Validazione per entrate e uscite
+    const mancaFornitoreCliente = formData.tipo === 'entrata' 
+      ? !formData.clienteId 
+      : !formData.fornitoreId;
+    
+    if (mancaFornitoreCliente || !formData.causale) {
+      const campo = formData.tipo === 'entrata' ? 'Cliente' : 'Fornitore';
+      alert(`⚠️ ${campo} e causale sono obbligatori!`);
       return;
     }
 
@@ -275,58 +293,79 @@ const [commissioni, setCommissioni] = useState(() => {
       if (filtroStatoPagamento === 'non_pagato' && mov.pagato) return false;
       return true;
     }).sort((a, b) => {
-      const dateA = new Date(a.data_movimento || a.data_scadenza || '9999-12-31');
-      const dateB = new Date(b.data_movimento || b.data_scadenza || '9999-12-31');
+      // Priorità a data_movimento se pagato, altrimenti data_scadenza
+      const dateA = a.pagato && a.data_movimento 
+        ? new Date(a.data_movimento)
+        : new Date(a.data_scadenza || '9999-12-31');
+      const dateB = b.pagato && b.data_movimento 
+        ? new Date(b.data_movimento)
+        : new Date(b.data_scadenza || '9999-12-31');
       return dateA - dateB;
     });
   }, [movimentiContabili, filtroDataDa, filtroDataA, filtroFornitore, filtroCantiere, filtroTipologia, filtroStatoPagamento]);
 
-  // ✅ CALCOLI CONTABILI
+ // ✅ CALCOLI CONTABILI
   const calcoliContabili = useMemo(() => {
-    let saldoRealeProgressivo = parseFloat(saldoIniziale);
-    const movimentiConSaldo = movimentiFiltrati.map(mov => {
-      const importoTotale = parseFloat(mov.importo || 0) + parseFloat(mov.commissione || 0);
-      
+    // Prima ordiniamo TUTTI i movimenti cronologicamente
+    const tuttiMovimentiOrdinati = [...movimentiContabili].sort((a, b) => {
+      // Priorità a data_movimento se pagato, altrimenti data_scadenza
+      const dateA = a.pagato && a.data_movimento 
+        ? new Date(a.data_movimento)
+        : new Date(a.data_scadenza || '9999-12-31');
+      const dateB = b.pagato && b.data_movimento 
+        ? new Date(b.data_movimento)
+        : new Date(b.data_scadenza || '9999-12-31');
+      return dateA - dateB;
+    });
+    // Creiamo una mappa con il saldo progressivo per ogni movimento
+    let saldoProgressivo = parseFloat(saldoIniziale);
+    const mapSaldi = new Map();
+    
+    tuttiMovimentiOrdinati.forEach(mov => {
       if (mov.pagato) {
+        const importoTotale = parseFloat(mov.importo || 0) + parseFloat(mov.commissione || 0);
         if (mov.tipologia_movimento === 'storno') {
-          saldoRealeProgressivo += importoTotale;
+          saldoProgressivo += importoTotale;
         } else if (mov.tipo === 'entrata') {
-          saldoRealeProgressivo += importoTotale;
+          saldoProgressivo += importoTotale;
         } else {
-          saldoRealeProgressivo -= importoTotale;
+          saldoProgressivo -= importoTotale;
         }
       }
-      return { ...mov, saldoProgressivo: saldoRealeProgressivo };
+      mapSaldi.set(mov.id, saldoProgressivo);
     });
 
+    // Ora applichiamo il saldo progressivo ai movimenti filtrati
+    const movimentiConSaldo = movimentiFiltrati.map(mov => {
+      return { ...mov, saldoProgressivo: mapSaldi.get(mov.id) };
+    });
+
+    // ✅ SOLO MOVIMENTI PAGATI per i totali
     const totaleEntrate = movimentiFiltrati
-      .filter(m => m.tipo === 'entrata' && m.tipologia_movimento !== 'storno')
+      .filter(m => m.tipo === 'entrata' && m.tipologia_movimento !== 'storno' && m.pagato)
       .reduce((sum, m) => sum + parseFloat(m.importo || 0) + parseFloat(m.commissione || 0), 0);
     
     const totaleUscite = movimentiFiltrati
-      .filter(m => m.tipo === 'uscita' && m.tipologia_movimento !== 'storno')
+      .filter(m => m.tipo === 'uscita' && m.tipologia_movimento !== 'storno' && m.pagato)
       .reduce((sum, m) => sum + parseFloat(m.importo || 0) + parseFloat(m.commissione || 0), 0);
 
-    const totaleEntratePagate = movimentiFiltrati
-      .filter(m => m.tipo === 'entrata' && m.pagato && m.tipologia_movimento !== 'storno')
-      .reduce((sum, m) => sum + parseFloat(m.importo || 0) + parseFloat(m.commissione || 0), 0);
+    // Trova l'ultimo movimento pagato GLOBALMENTE per il saldo reale
+    const ultimoMovimentoPagatoGlobale = tuttiMovimentiOrdinati
+      .filter(m => m.pagato)
+      .pop();
     
-    const totaleUscitePagate = movimentiFiltrati
-      .filter(m => m.tipo === 'uscita' && m.pagato && m.tipologia_movimento !== 'storno')
-      .reduce((sum, m) => sum + parseFloat(m.importo || 0) + parseFloat(m.commissione || 0), 0);
-
-    const totaleStorniPagati = movimentiFiltrati
-      .filter(m => m.tipologia_movimento === 'storno' && m.pagato)
-      .reduce((sum, m) => sum + parseFloat(m.importo || 0) + parseFloat(m.commissione || 0), 0);
+    const saldoReale = ultimoMovimentoPagatoGlobale 
+      ? mapSaldi.get(ultimoMovimentoPagatoGlobale.id)
+      : parseFloat(saldoIniziale);
 
     return {
       movimentiConSaldo,
       totaleEntrate,
       totaleUscite,
-      saldoReale: parseFloat(saldoIniziale) + totaleEntratePagate - totaleUscitePagate + totaleStorniPagati,
+      saldoReale,
       saldoPrevisto: parseFloat(saldoIniziale) + totaleEntrate - totaleUscite
     };
-  }, [movimentiFiltrati, saldoIniziale]);
+  }, [movimentiFiltrati, movimentiContabili, saldoIniziale]);
 
   // ✅ SALDO PREVISTO FINE MESE
   const saldoPrevistoFineMese = useMemo(() => {
@@ -461,39 +500,57 @@ const [commissioni, setCommissioni] = useState(() => {
         <th>Data Movimento</th>
         <th>Tipo</th>
         <th>Tipologia</th>
-        <th>Fornitore</th>
+        <th>Fornitore / Cliente</th>
         <th>Cantiere</th>
         <th>Causale</th>
         <th>Importo</th>
         <th>Comm.</th>
         <th>Totale</th>
+        <th>Saldo</th>
         <th>Scadenza</th>
         <th>Stato</th>
       </tr>
     </thead>
     <tbody>
-      ${movimentiMese.map(mov => {
-        const fornitore = fornitori.find(f => f.id === mov.fornitore_id);
-        const cliente = clienti.find(c => c.id === movimento.cliente_id);
-        const cantiere = cantieri.find(c => c.id === mov.cantiere_id);
-        const tipologia = tipologieMovimento.find(t => t.value === mov.tipologia_movimento);
-        const totale = parseFloat(mov.importo || 0) + parseFloat(mov.commissione || 0);
-        return `
+      <tbody>
+      ${(() => {
+        let saldoProgressivo = parseFloat(saldoIniziale);
+        return movimentiMese.map(mov => {
+          const fornitore = fornitori.find(f => f.id === mov.fornitore_id);
+          const cliente = clienti.find(c => c.id === mov.cliente_id);
+          const cantiere = cantieri.find(c => c.id === mov.cantiere_id);
+          const tipologia = tipologieMovimento.find(t => t.value === mov.tipologia_movimento);
+          const totale = parseFloat(mov.importo || 0) + parseFloat(mov.commissione || 0);
+          
+          // Calcola saldo progressivo solo per movimenti pagati
+          if (mov.pagato) {
+            if (mov.tipologia_movimento === 'storno') {
+              saldoProgressivo += totale;
+            } else if (mov.tipo === 'entrata') {
+              saldoProgressivo += totale;
+            } else {
+              saldoProgressivo -= totale;
+            }
+          }
+          
+          return `
         <tr class="${mov.tipo}">
           <td>${formatDate(mov.data_movimento)}</td>
           <td>${mov.tipo === 'entrata' ? '⬆️ Entrata' : '⬇️ Uscita'}</td>
           <td>${tipologia?.label || mov.tipologia_movimento}</td>
-          <td>${fornitore?.ragione_sociale || '-'}</td>
+          <td>${mov.tipo === 'entrata' ? (cliente?.ragione_sociale || '-') : (fornitore?.ragione_sociale || '-')}</td>
           <td>${cantiere?.nome || '-'}</td>
           <td>${mov.causale || '-'}</td>
           <td style="text-align: right;">€ ${parseFloat(mov.importo || 0).toFixed(2)}</td>
           <td style="text-align: right;">€ ${parseFloat(mov.commissione || 0).toFixed(2)}</td>
           <td style="text-align: right; font-weight: bold;">€ ${totale.toFixed(2)}</td>
+          <td style="text-align: right; font-weight: bold;">€ ${saldoProgressivo.toFixed(2)}</td>
           <td>${mov.tipo === 'uscita' ? formatDate(mov.data_scadenza) : '-'}</td>
           <td>${mov.pagato ? '✅ Pagato' : '⏳ Da pagare'}</td>
         </tr>
         `;
-      }).join('')}
+        }).join('');
+      })()}
     </tbody>
   </table>
   
@@ -591,34 +648,51 @@ const [commissioni, setCommissioni] = useState(() => {
         <th>Data Movimento</th>
         <th>Tipo</th>
         <th>Tipologia</th>
-        <th>Fornitore</th>
+        <th>Fornitore / Cliente</th>
         <th>Cantiere</th>
         <th>Causale</th>
         <th>Importo</th>
         <th>Comm.</th>
         <th>Totale</th>
+        <th>Saldo</th>
       </tr>
     </thead>
     <tbody>
-      ${movimentiMese.map(mov => {
-        const fornitore = fornitori.find(f => f.id === mov.fornitore_id);
-        const cantiere = cantieri.find(c => c.id === mov.cantiere_id);
-        const tipologia = tipologieMovimento.find(t => t.value === mov.tipologia_movimento);
-        const totale = parseFloat(mov.importo || 0) + parseFloat(mov.commissione || 0);
-        return `
+      <tbody>
+      ${(() => {
+        let saldoProgressivo = parseFloat(saldoIniziale);
+        return movimentiMese.map(mov => {
+          const fornitore = fornitori.find(f => f.id === mov.fornitore_id);
+          const cliente = clienti.find(c => c.id === mov.cliente_id);
+          const cantiere = cantieri.find(c => c.id === mov.cantiere_id);
+          const tipologia = tipologieMovimento.find(t => t.value === mov.tipologia_movimento);
+          const totale = parseFloat(mov.importo || 0) + parseFloat(mov.commissione || 0);
+          
+          // Calcola saldo progressivo (tutti i movimenti nella prima nota sono pagati)
+          if (mov.tipologia_movimento === 'storno') {
+            saldoProgressivo += totale;
+          } else if (mov.tipo === 'entrata') {
+            saldoProgressivo += totale;
+          } else {
+            saldoProgressivo -= totale;
+          }
+          
+          return `
         <tr class="${mov.tipo}">
           <td>${formatDate(mov.data_movimento)}</td>
           <td>${mov.tipo === 'entrata' ? '⬆️ Entrata' : '⬇️ Uscita'}</td>
           <td>${tipologia?.label || mov.tipologia_movimento}</td>
-          <td>${fornitore?.ragione_sociale || '-'}</td>
+          <td>${mov.tipo === 'entrata' ? (cliente?.ragione_sociale || '-') : (fornitore?.ragione_sociale || '-')}</td>
           <td>${cantiere?.nome || '-'}</td>
           <td>${mov.causale || '-'}</td>
           <td style="text-align: right;">€ ${parseFloat(mov.importo || 0).toFixed(2)}</td>
           <td style="text-align: right;">€ ${parseFloat(mov.commissione || 0).toFixed(2)}</td>
           <td style="text-align: right; font-weight: bold;">€ ${totale.toFixed(2)}</td>
+          <td style="text-align: right; font-weight: bold;">€ ${saldoProgressivo.toFixed(2)}</td>
         </tr>
         `;
-      }).join('')}
+        }).join('');
+      })()}
     </tbody>
   </table>
   
@@ -1182,6 +1256,7 @@ const [commissioni, setCommissioni] = useState(() => {
           <tbody>
             {calcoliContabili.movimentiConSaldo.map(mov => {
               const fornitore = fornitori.find(f => f.id === mov.fornitore_id);
+              const cliente = clienti.find(c => c.id === mov.cliente_id);
               const cantiere = cantieri.find(c => c.id === mov.cantiere_id);
               const tipologia = tipologieMovimento.find(t => t.value === mov.tipologia_movimento);
               const totale = parseFloat(mov.importo || 0) + parseFloat(mov.commissione || 0);
