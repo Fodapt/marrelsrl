@@ -99,17 +99,19 @@ const calcolaResiduo = (fattura) => {
     if (!filtroCliente && !filtroCantiere) return null; 
     
     const fatture = fattureEmesse.filter(f => {
-    if (filtroCliente && f.cliente_id !== filtroCliente) return false; 
-    if (filtroCantiere && f.cantiere_id !== filtroCantiere) return false; 
-    return true; 
-  });
-    const totaleEmesso = fatture.reduce((sum, f) => {
-  const totale = calcolaTotale(f.imponibile, f.percentuale_iva);
-  return f.tipo === 'nota_credito' ? sum - totale : sum + totale;
-}, 0);
+      if (filtroCliente && f.cliente_id !== filtroCliente) return false; 
+      if (filtroCantiere && f.cantiere_id !== filtroCantiere) return false; 
+      return true; 
+    });
+    
+    const totaleEmesso = fatture.reduce((sum, f) => 
+      sum + calcolaImportoEffettivo(f), 0);
+    
     const totaleIncassato = fatture.reduce((sum, f) => 
       sum + calcolaIncassato(f), 0);
-    const residuo = totaleEmesso - totaleIncassato;
+    
+    const residuo = fatture.reduce((sum, f) => 
+      sum + calcolaResiduo(f), 0);
     
     return { totaleEmesso, totaleIncassato, residuo };
   }, [fattureEmesse, filtroCliente, filtroCantiere]);
@@ -250,6 +252,7 @@ const calcolaResiduo = (fattura) => {
     let totaleIVA = 0;
     let totaleImponibileConIVA = 0;
     let totaleIncassatoGlobale = 0;
+    let totaleResiduoGlobale = 0;
 
     // ========== RAGGRUPPA PER CLIENTE ==========
     const fatturePerCliente = {};
@@ -285,6 +288,7 @@ const calcolaResiduo = (fattura) => {
         ? imponibile 
         : imponibileConIVA;
       const incassato = calcolaIncassato(fattura);
+      const residuo = totaleFattura - incassato;
 
       if (!isNotaCredito) {
         totaleImponibili += imponibile;
@@ -292,6 +296,7 @@ const calcolaResiduo = (fattura) => {
         totaleImponibileConIVA += imponibileConIVA;
       }
       totaleIncassatoGlobale += incassato;
+      totaleResiduoGlobale += residuo;
 
       const styleClass = isNotaCredito ? 'color: #dc2626; font-weight: bold;' : '';
       const bgClass = isNotaCredito ? 'background-color: #fee2e2;' : '';
@@ -312,7 +317,7 @@ const calcolaResiduo = (fattura) => {
           <td style="border: 1px solid #ddd; padding: 8px; text-align: right; ${styleClass}">€ ${iva.toFixed(2)}</td>
           <td style="border: 1px solid #ddd; padding: 8px; text-align: right; ${styleClass}">€ ${imponibileConIVA.toFixed(2)}</td>
           <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600; ${styleClass}">€ ${totaleFattura.toFixed(2)}</td>
-          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; color: #16a34a; font-weight: 600;">€ ${incassato.toFixed(2)}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; color: #d97706; font-weight: 600;">€ ${residuo.toFixed(2)}</td>
         </tr>
       `;
     }).join('');
@@ -326,6 +331,7 @@ const calcolaResiduo = (fattura) => {
       let totIVA = 0;
       let totImponibileIVA = 0;
       let totIncassato = 0;
+      let totResiduo = 0;
 
       fattureCliente.forEach(f => {
         const isNC = f.tipo === 'nota_credito';
@@ -338,7 +344,10 @@ const calcolaResiduo = (fattura) => {
           totIVA += iva;
           totImponibileIVA += imp + iva;
         }
-        totIncassato += calcolaIncassato(f);
+        const incassato = calcolaIncassato(f);
+        const totaleFatt = (f.reverse_charge || f.versamento_iva_diretto) ? imp : imp + iva;
+        totIncassato += incassato;
+        totResiduo += (totaleFatt - incassato);
       });
 
       return `
@@ -348,46 +357,50 @@ const calcolaResiduo = (fattura) => {
           <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600;">€ ${totImponibile.toFixed(2)}</td>
           <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600;">€ ${totIVA.toFixed(2)}</td>
           <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600;">€ ${totImponibileIVA.toFixed(2)}</td>
-          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600; color: #16a34a;">€ ${totIncassato.toFixed(2)}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600; color: #d97706;">€ ${totResiduo.toFixed(2)}</td>
         </tr>
       `;
     }).join('');
 
     // ========== GENERA TOTALI PER CANTIERE ==========
-    const totaliCantieriHTML = Object.keys(fatturePerCantiere).map(cantiereId => {
-      const fattureCantiere = fatturePerCantiere[cantiereId];
-      const cantiere = cantiereId === 'nessuno' ? null : cantieri.find(c => c.id === cantiereId);
-      
-      let totImponibile = 0;
-      let totIVA = 0;
-      let totImponibileIVA = 0;
-      let totIncassato = 0;
+const totaliCantieriHTML = Object.keys(fatturePerCantiere).map(cantiereId => {
+  const fattureCantiere = fatturePerCantiere[cantiereId];
+  const cantiere = cantiereId === 'nessuno' ? null : cantieri.find(c => c.id === cantiereId);
+  
+  let totImponibile = 0;
+  let totIVA = 0;
+  let totImponibileIVA = 0;
+  let totIncassato = 0;
+  let totResiduo = 0;  // ✅ Aggiunto
 
-      fattureCantiere.forEach(f => {
-        const isNC = f.tipo === 'nota_credito';
-        const molt = isNC ? -1 : 1;
-        const imp = parseFloat(f.imponibile || 0) * molt;
-        const iva = f.reverse_charge ? 0 : calcolaIVA(f.imponibile, f.percentuale_iva) * molt;
-        
-        if (!isNC) {
-          totImponibile += imp;
-          totIVA += iva;
-          totImponibileIVA += imp + iva;
-        }
-        totIncassato += calcolaIncassato(f);
-      });
+  fattureCantiere.forEach(f => {
+    const isNC = f.tipo === 'nota_credito';
+    const molt = isNC ? -1 : 1;
+    const imp = parseFloat(f.imponibile || 0) * molt;
+    const iva = f.reverse_charge ? 0 : calcolaIVA(f.imponibile, f.percentuale_iva) * molt;
+    
+    if (!isNC) {
+      totImponibile += imp;
+      totIVA += iva;
+      totImponibileIVA += imp + iva;
+    }
+    const incassato = calcolaIncassato(f);  // ✅ Calcola incassato
+    const totaleFatt = (f.reverse_charge || f.versamento_iva_diretto) ? imp : imp + iva;  // ✅ Calcola totale corretto
+    totIncassato += incassato;
+    totResiduo += (totaleFatt - incassato);  // ✅ Calcola residuo
+  });
 
-      return `
-        <tr>
-          <td style="border: 1px solid #ddd; padding: 8px; font-weight: 600;">${cantiere?.nome || 'Nessun Cantiere'}</td>
-          <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${fattureCantiere.length}</td>
-          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600;">€ ${totImponibile.toFixed(2)}</td>
-          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600;">€ ${totIVA.toFixed(2)}</td>
-          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600;">€ ${totImponibileIVA.toFixed(2)}</td>
-          <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600; color: #16a34a;">€ ${totIncassato.toFixed(2)}</td>
-        </tr>
-      `;
-    }).join('');
+  return `
+    <tr>
+      <td style="border: 1px solid #ddd; padding: 8px; font-weight: 600;">${cantiere?.nome || 'Nessun Cantiere'}</td>
+      <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${fattureCantiere.length}</td>
+      <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600;">€ ${totImponibile.toFixed(2)}</td>
+      <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600;">€ ${totIVA.toFixed(2)}</td>
+      <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600;">€ ${totImponibileIVA.toFixed(2)}</td>
+      <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: 600; color: #d97706;">€ ${totResiduo.toFixed(2)}</td>
+    </tr>
+  `;
+}).join('');
 
     const dataStampa = new Date().toLocaleDateString('it-IT', { 
       day: '2-digit', 
@@ -653,7 +666,7 @@ const calcolaResiduo = (fattura) => {
         <th style="text-align: right;">IVA</th>
         <th style="text-align: right;">Tot. Imp.+IVA</th>
         <th style="text-align: right;">Tot. Fattura</th>
-        <th style="text-align: right;">Incassato</th>
+        <th style="text-align: right;">Residuo</th>
       </tr>
     </thead>
     <tbody>
@@ -677,8 +690,8 @@ const calcolaResiduo = (fattura) => {
         <div class="totale-valore">€ ${totaleImponibileConIVA.toFixed(2)}</div>
       </div>
       <div class="totale-item">
-        <div class="totale-label">Totale Incassato</div>
-        <div class="totale-valore">€ ${totaleIncassatoGlobale.toFixed(2)}</div>
+        <div class="totale-label">Totale Residuo</div>
+        <div class="totale-valore" style="color: #d97706;">€ ${totaleResiduoGlobale.toFixed(2)}</div>
       </div>
     </div>
   </div>
@@ -693,7 +706,7 @@ const calcolaResiduo = (fattura) => {
           <th style="text-align: right;">Imponibile</th>
           <th style="text-align: right;">IVA</th>
           <th style="text-align: right;">Imp. + IVA</th>
-          <th style="text-align: right;">Incassato</th>
+          <th style="text-align: right;">Residuo</th>
         </tr>
       </thead>
       <tbody>
@@ -712,7 +725,7 @@ const calcolaResiduo = (fattura) => {
           <th style="text-align: right;">Imponibile</th>
           <th style="text-align: right;">IVA</th>
           <th style="text-align: right;">Imp. + IVA</th>
-          <th style="text-align: right;">Incassato</th>
+          <th style="text-align: right;">Residuo</th>
         </tr>
       </thead>
       <tbody>

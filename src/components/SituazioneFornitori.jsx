@@ -30,6 +30,7 @@ function SituazioneFornitori() {
   const [filtroStato, setFiltroStato] = useState('');
   const [ordinamento, setOrdinamento] = useState('data-desc');
   const [saving, setSaving] = useState(false);
+  const [mostraScadenzarioCompleto, setMostraScadenzarioCompleto] = useState(false);
 
   // ✅ LOADING
   if (loading.ordiniFornitori || loading.fornitori || loading.cantieri) {
@@ -50,27 +51,50 @@ function SituazioneFornitori() {
     return date.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
-  const calcolaAccontiFatturaDiretta = (ordine) => {
-  if (!ordine || ordine.tipo !== 'fattura_diretta') return { totale: 0, pagato: 0, residuo: 0, acconti: [], noteCredito: [], totaleNoteCredito: 0 };
+const calcolaAccontiFatturaDiretta = (ordine) => {
+  if (!ordine || ordine.tipo !== 'fattura_diretta') return { 
+    totale: 0, 
+    pagato: 0, 
+    residuo: 0, 
+    acconti: [], 
+    noteCredito: [], 
+    buoni: [],
+    mavRiba: [],
+    totaleNoteCredito: 0,
+    totaleBuoni: 0,
+    totaleMavRibaPagati: 0
+  };
   
   const acconti = ordine.acconti_pagamento || [];
   const noteCredito = ordine.note_credito || [];
+  const buoni = ordine.buoni || [];
+  const mavRiba = ordine.mav_riba || [];
   
   const totalePagato = acconti.reduce((sum, acc) => sum + parseFloat(acc.importo || 0), 0);
   const totaleNoteCredito = noteCredito.reduce((sum, nc) => sum + parseFloat(nc.importo || 0), 0);
+  const totaleBuoni = buoni.reduce((sum, b) => sum + parseFloat(b.importo || 0), 0);
+  
+  // Solo i MAV/RI.BA effettivamente pagati
+  const totaleMavRibaPagati = mavRiba
+    .filter(mr => mr.pagato)
+    .reduce((sum, mr) => sum + parseFloat(mr.importo || 0), 0);
   
   const importoOriginale = parseFloat(ordine.importo || 0);
-  const totaleEffettivo = importoOriginale - totaleNoteCredito;
-  const residuo = totaleEffettivo - totalePagato;
+  const totaleEffettivo = importoOriginale - totaleNoteCredito - totaleBuoni;
+  const residuo = totaleEffettivo - totalePagato - totaleMavRibaPagati;
   
   return { 
     totale: importoOriginale, 
     totaleEffettivo, 
     totaleNoteCredito,
-    pagato: totalePagato, 
+    totaleBuoni,
+    totaleMavRibaPagati,
+    pagato: totalePagato + totaleMavRibaPagati, 
     residuo, 
     acconti,
-    noteCredito 
+    noteCredito,
+    buoni,
+    mavRiba
   };
 };
 
@@ -247,6 +271,62 @@ function SituazioneFornitori() {
       saldoTotale 
     };
   }, [ordiniFornitori, filtroFornitore]);
+
+  // ✅ SCADENZIARIO MAV/RI.BA
+  const scadenzarioMavRiba = useMemo(() => {
+    const oggi = new Date();
+    oggi.setHours(0, 0, 0, 0);
+    
+    const scadenze = [];
+    
+    // Estrai tutti i MAV/RI.BA non pagati da tutte le fatture dirette
+    ordiniFornitori
+      .filter(ord => ord.tipo === 'fattura_diretta' && ord.mav_riba && ord.mav_riba.length > 0)
+      .forEach(ord => {
+        const fornitore = fornitori.find(f => f.id === ord.fornitore_id);
+        
+        ord.mav_riba
+          .filter(mr => !mr.pagato) // Solo quelli non pagati
+          .forEach(mr => {
+            const scadenza = new Date(mr.dataScadenza);
+            scadenza.setHours(0, 0, 0, 0);
+            const giorniAllaScadenza = Math.ceil((scadenza - oggi) / (1000 * 60 * 60 * 24));
+            
+            scadenze.push({
+              id: mr.id,
+              ordineId: ord.id,
+              tipo: mr.tipo,
+              numero: mr.numero,
+              fornitore: fornitore?.ragione_sociale || 'N/A',
+              numeroFattura: ord.numero_fattura,
+              dataScadenza: mr.dataScadenza,
+              giorniAllaScadenza,
+              importo: parseFloat(mr.importo || 0),
+              // Categorie per colori
+              categoria: giorniAllaScadenza < 0 ? 'scaduto' 
+                       : giorniAllaScadenza === 0 ? 'oggi'
+                       : giorniAllaScadenza <= 7 ? 'settimana'
+                       : giorniAllaScadenza <= 30 ? 'mese'
+                       : 'futuro'
+            });
+          });
+      });
+    
+    // Ordina per data scadenza (prima i più urgenti)
+    scadenze.sort((a, b) => new Date(a.dataScadenza) - new Date(b.dataScadenza));
+    
+    return scadenze;
+  }, [ordiniFornitori, fornitori]);
+
+  const riepilogoScadenze = useMemo(() => {
+    return {
+      scaduti: scadenzarioMavRiba.filter(s => s.categoria === 'scaduto').length,
+      oggi: scadenzarioMavRiba.filter(s => s.categoria === 'oggi').length,
+      settimana: scadenzarioMavRiba.filter(s => s.categoria === 'settimana').length,
+      mese: scadenzarioMavRiba.filter(s => s.categoria === 'mese').length,
+      futuro: scadenzarioMavRiba.filter(s => s.categoria === 'futuro').length,
+    };
+  }, [scadenzarioMavRiba]);
 
   // ✅ SALVA ORDINE
   const handleSaveOrdine = async () => {
@@ -745,7 +825,169 @@ return (
           </div>
         </div>
       </div>
-
+{/* Scadenziario MAV/RI.BA */}
+{scadenzarioMavRiba.length > 0 && (
+  <div className="bg-white rounded-lg shadow-lg border-2 border-orange-200">
+    <div className="bg-gradient-to-r from-orange-50 to-red-50 p-4 border-b border-orange-200">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-bold text-orange-900 flex items-center gap-2">
+          ⚠️ Scadenze MAV/RI.BA ({scadenzarioMavRiba.length})
+        </h3>
+        {scadenzarioMavRiba.length > 5 && (
+          <button 
+            onClick={() => setMostraScadenzarioCompleto(!mostraScadenzarioCompleto)}
+            className="text-sm text-orange-700 hover:text-orange-900 font-medium">
+            {mostraScadenzarioCompleto ? '✕ Chiudi' : `📋 Mostra tutte (${scadenzarioMavRiba.length})`}
+          </button>
+        )}
+      </div>
+    </div>
+    
+    <div className="p-4">
+      {/* Lista scadenze */}
+      <div className="space-y-2 mb-4">
+        {(mostraScadenzarioCompleto ? scadenzarioMavRiba : scadenzarioMavRiba.slice(0, 5)).map(scadenza => {
+          let colorClass = 'text-gray-700';
+          let bgClass = 'bg-gray-50';
+          let testoScadenza = '';
+          
+          if (scadenza.categoria === 'scaduto') {
+            colorClass = 'text-red-700';
+            bgClass = 'bg-red-50 border-red-200';
+            testoScadenza = `scaduto da ${Math.abs(scadenza.giorniAllaScadenza)}gg`;
+          } else if (scadenza.categoria === 'oggi') {
+            colorClass = 'text-red-700';
+            bgClass = 'bg-red-50 border-red-200';
+            testoScadenza = 'OGGI';
+          } else if (scadenza.categoria === 'settimana') {
+            colorClass = 'text-orange-700';
+            bgClass = 'bg-orange-50 border-orange-200';
+            testoScadenza = `tra ${scadenza.giorniAllaScadenza}gg`;
+          } else if (scadenza.categoria === 'mese') {
+            colorClass = 'text-yellow-700';
+            bgClass = 'bg-yellow-50 border-yellow-200';
+            testoScadenza = `tra ${scadenza.giorniAllaScadenza}gg`;
+          } else {
+            colorClass = 'text-green-700';
+            bgClass = 'bg-green-50 border-green-200';
+            testoScadenza = `tra ${scadenza.giorniAllaScadenza}gg`;
+          }
+          
+          return (
+            <div 
+              key={`${scadenza.ordineId}-${scadenza.id}`}
+              className={`p-3 rounded border ${bgClass} flex justify-between items-center hover:shadow-md transition-shadow cursor-pointer`}
+              onClick={() => {
+                const ordine = ordiniFornitori.find(o => o.id === scadenza.ordineId);
+                if (ordine) {
+                  setFatturaDirettaSelezionata(ordine);
+                  setShowAccontiModal(true);
+                }
+              }}>
+              <div className="flex-1">
+                <div className="font-medium text-gray-900">
+                  {scadenza.fornitore} - {scadenza.tipo} N. {scadenza.numero}
+                </div>
+                <div className="text-sm text-gray-600">
+                  FATTURA N. {scadenza.numeroFattura} - SCAD. {formatDate(scadenza.dataScadenza)}
+                </div>
+              </div>
+              <div className="text-right ml-4">
+                <div className={`text-sm font-semibold ${colorClass} mb-1`}>
+                  {testoScadenza}
+                </div>
+                <div className="font-bold text-gray-900">
+                  € {scadenza.importo.toFixed(2)}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      
+      {!mostraScadenzarioCompleto && scadenzarioMavRiba.length > 5 && (
+        <button 
+          onClick={() => setMostraScadenzarioCompleto(true)}
+          className="text-sm text-orange-700 hover:text-orange-900 font-medium">
+          ... e altre {scadenzarioMavRiba.length - 5} scadenze
+        </button>
+      )}
+      
+      {/* Barre colorate indicative */}
+      <div className="flex gap-1 h-2 mt-4">
+        {riepilogoScadenze.scaduti > 0 && (
+          <div 
+            className="bg-red-500 rounded" 
+            style={{flex: riepilogoScadenze.scaduti}}
+            title={`${riepilogoScadenze.scaduti} scaduti`}
+          />
+        )}
+        {riepilogoScadenze.oggi > 0 && (
+          <div 
+            className="bg-red-400 rounded" 
+            style={{flex: riepilogoScadenze.oggi}}
+            title={`${riepilogoScadenze.oggi} oggi`}
+          />
+        )}
+        {riepilogoScadenze.settimana > 0 && (
+          <div 
+            className="bg-orange-500 rounded" 
+            style={{flex: riepilogoScadenze.settimana}}
+            title={`${riepilogoScadenze.settimana} entro 7 giorni`}
+          />
+        )}
+        {riepilogoScadenze.mese > 0 && (
+          <div 
+            className="bg-yellow-500 rounded" 
+            style={{flex: riepilogoScadenze.mese}}
+            title={`${riepilogoScadenze.mese} entro 30 giorni`}
+          />
+        )}
+        {riepilogoScadenze.futuro > 0 && (
+          <div 
+            className="bg-green-500 rounded" 
+            style={{flex: riepilogoScadenze.futuro}}
+            title={`${riepilogoScadenze.futuro} oltre 30 giorni`}
+          />
+        )}
+      </div>
+      
+      {/* Legenda */}
+      <div className="flex flex-wrap gap-3 mt-3 text-xs">
+        {riepilogoScadenze.scaduti > 0 && (
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 bg-red-500 rounded"></div>
+            <span>Scaduti ({riepilogoScadenze.scaduti})</span>
+          </div>
+        )}
+        {riepilogoScadenze.oggi > 0 && (
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 bg-red-400 rounded"></div>
+            <span>Oggi ({riepilogoScadenze.oggi})</span>
+          </div>
+        )}
+        {riepilogoScadenze.settimana > 0 && (
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 bg-orange-500 rounded"></div>
+            <span>Entro 7gg ({riepilogoScadenze.settimana})</span>
+          </div>
+        )}
+        {riepilogoScadenze.mese > 0 && (
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 bg-yellow-500 rounded"></div>
+            <span>Entro 30gg ({riepilogoScadenze.mese})</span>
+          </div>
+        )}
+        {riepilogoScadenze.futuro > 0 && (
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 bg-green-500 rounded"></div>
+            <span>Oltre 30gg ({riepilogoScadenze.futuro})</span>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}
       {/* Riepilogo Fornitore */}
       {riepilogoFornitore && (
         <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-6 rounded-lg shadow-lg border-2 border-purple-300">
@@ -1001,19 +1243,64 @@ return (
               <div key={ordine.id} className="bg-white rounded-lg shadow p-6">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 flex-wrap">
   <h3 className="text-xl font-bold text-blue-600">
     {ordine.tipo === 'fattura_diretta' ? 'Fattura Diretta' : 'Ordine'} {ordine.numero_ordine.replace('DIRETTO-', '')}
   </h3>
   {ordine.tipo === 'fattura_diretta' ? (
     (() => {
       const hasNoteCredito = ordine.note_credito && ordine.note_credito.length > 0;
+      const hasBuoni = ordine.buoni && ordine.buoni.length > 0;
+      const hasMavRiba = ordine.mav_riba && ordine.mav_riba.length > 0;
+      
+      // Separa MAV e RI.BA
+      let mavPagati = 0, mavDaPagare = 0;
+      let ribaPagati = 0, ribaDaPagare = 0;
+      
+      if (hasMavRiba) {
+        ordine.mav_riba.forEach(mr => {
+          if (mr.tipo === 'MAV') {
+            if (mr.pagato) mavPagati++;
+            else mavDaPagare++;
+          } else if (mr.tipo === 'RIBA') {
+            if (mr.pagato) ribaPagati++;
+            else ribaDaPagare++;
+          }
+        });
+      }
       
       if (!hasNoteCredito) {
         return (
-          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-            Fattura Diretta
-          </span>
+          <>
+            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+              Fattura Diretta
+            </span>
+            {hasBuoni && (
+              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                Con Buono
+              </span>
+            )}
+            {mavDaPagare > 0 && (
+              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                🏦 MAV ({mavDaPagare})
+              </span>
+            )}
+            {ribaDaPagare > 0 && (
+              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                🏦 RI.BA ({ribaDaPagare})
+              </span>
+            )}
+            {mavPagati > 0 && (
+              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                ✓ MAV Pagati ({mavPagati})
+              </span>
+            )}
+            {ribaPagati > 0 && (
+              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                ✓ RI.BA Pagati ({ribaPagati})
+              </span>
+            )}
+          </>
         );
       }
       
@@ -1026,6 +1313,31 @@ return (
           <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
             Fattura Diretta
           </span>
+          {hasBuoni && (
+            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+              Con Buono
+            </span>
+          )}
+          {mavDaPagare > 0 && (
+            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+              🏦 MAV ({mavDaPagare})
+            </span>
+          )}
+          {ribaDaPagare > 0 && (
+            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+              🏦 RI.BA ({ribaDaPagare})
+            </span>
+          )}
+          {mavPagati > 0 && (
+            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+              ✓ MAV Pagati ({mavPagati})
+            </span>
+          )}
+          {ribaPagati > 0 && (
+            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+              ✓ RI.BA Pagati ({ribaPagati})
+            </span>
+          )}
           <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
             isAnnullamento ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
           }`}>
@@ -1369,20 +1681,43 @@ function DettaglioOrdineModal({
         </div>
 
         {/* Riepilogo */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
-          <div className="bg-blue-50 p-3 rounded border border-blue-200">
-            <div className="text-xs text-blue-700 mb-1">Totale Ordine</div>
-            <div className="text-lg font-bold text-blue-900">€ {parseFloat(ordine.importo).toFixed(2)}</div>
-          </div>
-          <div className="bg-green-50 p-3 rounded border border-green-200">
-            <div className="text-xs text-green-700 mb-1">Già Pagato</div>
-            <div className="text-lg font-bold text-green-900">€ {stato.effettivamentePagato.toFixed(2)}</div>
-          </div>
-          <div className="bg-orange-50 p-3 rounded border border-orange-200">
-            <div className="text-xs text-orange-700 mb-1">Residuo da Pagare</div>
-            <div className="text-lg font-bold text-orange-900">€ {stato.saldoDaPagare.toFixed(2)}</div>
-          </div>
-        </div>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
+  <div className="bg-blue-50 p-3 rounded border border-blue-200">
+    <div className="text-xs text-blue-700 mb-1">Totale Originale</div>
+    <div className="text-lg font-bold text-blue-900">€ {accInfo.totale.toFixed(2)}</div>
+  </div>
+  <div className="bg-red-50 p-3 rounded border border-red-200">
+    <div className="text-xs text-red-700 mb-1">Note di Credito</div>
+    <div className="text-lg font-bold text-red-900">- € {accInfo.totaleNoteCredito.toFixed(2)}</div>
+  </div>
+  <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
+    <div className="text-xs text-yellow-700 mb-1">Buoni (Sconti)</div>
+    <div className="text-lg font-bold text-yellow-900">- € {accInfo.totaleBuoni.toFixed(2)}</div>
+  </div>
+  <div className="bg-purple-50 p-3 rounded border border-purple-200">
+    <div className="text-xs text-purple-700 mb-1">Totale Effettivo</div>
+    <div className="text-lg font-bold text-purple-900">€ {accInfo.totaleEffettivo.toFixed(2)}</div>
+  </div>
+  <div className="bg-green-50 p-3 rounded border border-green-200">
+    <div className="text-xs text-green-700 mb-1">Pagato</div>
+    <div className="text-lg font-bold text-green-900">€ {accInfo.pagato.toFixed(2)}</div>
+    {accInfo.totaleMavRibaPagati > 0 && (
+      <div className="text-xs text-green-600 mt-1">
+        (MAV/RI.BA: € {accInfo.totaleMavRibaPagati.toFixed(2)})
+      </div>
+    )}
+  </div>
+  <div className={`p-3 rounded border ${
+    accInfo.residuo > 0 ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200'
+  }`}>
+    <div className={`text-xs mb-1 ${accInfo.residuo > 0 ? 'text-orange-700' : 'text-gray-700'}`}>
+      Residuo da Pagare
+    </div>
+    <div className={`text-lg font-bold ${accInfo.residuo > 0 ? 'text-orange-900' : 'text-gray-900'}`}>
+      € {accInfo.residuo.toFixed(2)}
+    </div>
+  </div>
+</div>
 
         {/* Form Nuova Fattura */}
         <div className="bg-blue-50 p-4 rounded-lg mb-4 border border-blue-200">
@@ -1692,6 +2027,18 @@ function GestioneAccontiModal({
   const [importoNotaCredito, setImportoNotaCredito] = useState('');
   const [motivoNotaCredito, setMotivoNotaCredito] = useState('');
   const [showNoteCreditoSection, setShowNoteCreditoSection] = useState(false);
+  const [dataBuono, setDataBuono] = useState(new Date().toISOString().split('T')[0]);
+  const [importoBuono, setImportoBuono] = useState('');
+  const [descrizioneBuono, setDescrizioneBuono] = useState('');
+  const [showBuoniSection, setShowBuoniSection] = useState(false);
+  const [dataMavRiba, setDataMavRiba] = useState(new Date().toISOString().split('T')[0]);
+  const [dataScadenzaMavRiba, setDataScadenzaMavRiba] = useState(new Date().toISOString().split('T')[0]);
+  const [importoMavRiba, setImportoMavRiba] = useState('');
+  const [numeroMavRiba, setNumeroMavRiba] = useState('');
+  const [tipoMavRiba, setTipoMavRiba] = useState('MAV');
+  const [showMavRibaSection, setShowMavRibaSection] = useState(false);
+  const [pagamentoInCorso, setPagamentoInCorso] = useState(null); // ID del MAV/RI.BA in fase di pagamento
+  const [dataPagamentoSelezionata, setDataPagamentoSelezionata] = useState(new Date().toISOString().split('T')[0]);
 
   const fornitore = fornitori.find(f => f.id === fattura.fornitore_id);
   const cantiere = cantieri.find(c => c.id === fattura.cantiere_id);
@@ -1798,7 +2145,141 @@ function GestioneAccontiModal({
       alert('❌ Errore: ' + result.error);
     }
   };
+const aggiungiBuono = async () => {
+  const importo = parseFloat(importoBuono);
+  if (!importo || importo <= 0) {
+    return alert('⚠️ Inserisci un importo valido');
+  }
 
+  if (!descrizioneBuono.trim()) {
+    return alert('⚠️ Inserisci una descrizione per il buono');
+  }
+
+  setSaving(true);
+
+  const nuovoBuono = {
+    id: Date.now().toString(),
+    data: dataBuono,
+    importo,
+    descrizione: descrizioneBuono
+  };
+
+  const nuoviBuoni = [...(fattura.buoni || []), nuovoBuono];
+  const result = await updateRecord('ordiniFornitori', fattura.id, { buoni: nuoviBuoni });
+
+  setSaving(false);
+
+  if (result.success) {
+    setImportoBuono('');
+    setDescrizioneBuono('');
+    setDataBuono(new Date().toISOString().split('T')[0]);
+    setShowBuoniSection(false);
+    alert('✅ Buono registrato!');
+    onClose();
+  } else {
+    alert('❌ Errore: ' + result.error);
+  }
+};
+
+const rimuoviBuono = async (buonoId) => {
+  if (!confirm('❌ Eliminare questo buono?')) return;
+
+  setSaving(true);
+  const nuoviBuoni = (fattura.buoni || []).filter(b => b.id !== buonoId);
+  const result = await updateRecord('ordiniFornitori', fattura.id, { buoni: nuoviBuoni });
+  setSaving(false);
+
+  if (result.success) {
+    alert('✅ Buono eliminato!');
+    onClose();
+  } else {
+    alert('❌ Errore: ' + result.error);
+  }
+};
+
+
+const aggiungiMavRiba = async () => {
+  const importo = parseFloat(importoMavRiba);
+  if (!importo || importo <= 0) {
+    return alert('⚠️ Inserisci un importo valido');
+  }
+
+  if (!numeroMavRiba.trim()) {
+    return alert('⚠️ Inserisci il numero MAV/RI.BA');
+  }
+
+  setSaving(true);
+
+  const nuovoMavRiba = {
+    id: Date.now().toString(),
+    tipo: tipoMavRiba,
+    numero: numeroMavRiba,
+    data: dataMavRiba,
+    dataScadenza: dataScadenzaMavRiba,
+    importo,
+    pagato: false,
+    dataPagamento: null
+  };
+
+  const nuoviMavRiba = [...(fattura.mav_riba || []), nuovoMavRiba];
+  const result = await updateRecord('ordiniFornitori', fattura.id, { mav_riba: nuoviMavRiba });
+
+  setSaving(false);
+
+  if (result.success) {
+    setImportoMavRiba('');
+    setNumeroMavRiba('');
+    setDataMavRiba(new Date().toISOString().split('T')[0]);
+    setDataScadenzaMavRiba(new Date().toISOString().split('T')[0]);
+    setShowMavRibaSection(false);
+    alert('✅ MAV/RI.BA registrato!');
+    onClose();
+  } else {
+    alert('❌ Errore: ' + result.error);
+  }
+};
+
+const rimuoviMavRiba = async (mavRibaId) => {
+  if (!confirm('❌ Eliminare questo MAV/RI.BA?')) return;
+
+  setSaving(true);
+  const nuoviMavRiba = (fattura.mav_riba || []).filter(mr => mr.id !== mavRibaId);
+  const result = await updateRecord('ordiniFornitori', fattura.id, { mav_riba: nuoviMavRiba });
+  setSaving(false);
+
+  if (result.success) {
+    alert('✅ MAV/RI.BA eliminato!');
+    onClose();
+  } else {
+    alert('❌ Errore: ' + result.error);
+  }
+};
+
+const segnaComePagato = async (mavRibaId, pagato, dataPagamento) => {
+  setSaving(true);
+  const nuoviMavRiba = (fattura.mav_riba || []).map(mr => {
+    if (mr.id === mavRibaId) {
+      return {
+        ...mr,
+        pagato,
+        dataPagamento: pagato ? dataPagamento : null
+      };
+    }
+    return mr;
+  });
+  
+  const result = await updateRecord('ordiniFornitori', fattura.id, { mav_riba: nuoviMavRiba });
+  setSaving(false);
+
+  if (result.success) {
+    alert(pagato ? '✅ Segnato come pagato!' : '✅ Segnato come non pagato!');
+    setPagamentoInCorso(null);
+    setDataPagamentoSelezionata(new Date().toISOString().split('T')[0]);
+    onClose();
+  } else {
+    alert('❌ Errore: ' + result.error);
+  }
+};
   
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -1824,7 +2305,7 @@ function GestioneAccontiModal({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
   <div className="bg-blue-50 p-3 rounded border border-blue-200">
     <div className="text-xs text-blue-700 mb-1">Totale Originale</div>
     <div className="text-lg font-bold text-blue-900">€ {accInfo.totale.toFixed(2)}</div>
@@ -1832,6 +2313,10 @@ function GestioneAccontiModal({
   <div className="bg-red-50 p-3 rounded border border-red-200">
     <div className="text-xs text-red-700 mb-1">Note di Credito</div>
     <div className="text-lg font-bold text-red-900">- € {accInfo.totaleNoteCredito.toFixed(2)}</div>
+  </div>
+  <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
+    <div className="text-xs text-yellow-700 mb-1">Buoni (Sconti)</div>
+    <div className="text-lg font-bold text-yellow-900">- € {accInfo.totaleBuoni.toFixed(2)}</div>
   </div>
   <div className="bg-purple-50 p-3 rounded border border-purple-200">
     <div className="text-xs text-purple-700 mb-1">Totale Effettivo</div>
@@ -2024,6 +2509,290 @@ function GestioneAccontiModal({
       ))}
     </div>
   )}
+</div>
+{/* Sezione Buoni (Sconti) */}
+<div className="mb-6">
+  <div className="flex justify-between items-center mb-3">
+    <h4 className="font-semibold text-yellow-900">🎫 Buoni / Sconti ({(accInfo.buoni || []).length})</h4>
+    <button 
+      onClick={() => setShowBuoniSection(!showBuoniSection)}
+      className="bg-yellow-600 text-white px-3 py-1 rounded text-sm hover:bg-yellow-700"
+    >
+      {showBuoniSection ? '✕ Chiudi' : '➕ Aggiungi Buono'}
+    </button>
+  </div>
+
+  {showBuoniSection && (
+    <div className="bg-yellow-50 p-4 rounded border border-yellow-200 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-sm font-medium mb-1">Data Buono</label>
+          <input 
+            type="date"
+            className="border rounded px-3 py-2 w-full"
+            value={dataBuono}
+            onChange={(e) => setDataBuono(e.target.value)}
+            disabled={saving}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Importo (€)</label>
+          <input 
+            type="number"
+            step="0.01"
+            className="border rounded px-3 py-2 w-full"
+            placeholder="0.00"
+            value={importoBuono}
+            onChange={(e) => setImportoBuono(e.target.value)}
+            disabled={saving}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Descrizione</label>
+          <input 
+            type="text"
+            className="border rounded px-3 py-2 w-full"
+            placeholder="es: Sconto promozionale..."
+            value={descrizioneBuono}
+            onChange={(e) => setDescrizioneBuono(e.target.value)}
+            disabled={saving}
+          />
+        </div>
+      </div>
+      <button 
+        onClick={aggiungiBuono}
+        disabled={saving}
+        className="mt-3 bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 disabled:opacity-50 w-full"
+      >
+        {saving ? '⏳ Salvataggio...' : '✓ Aggiungi Buono'}
+      </button>
+    </div>
+  )}
+
+  {/* Lista Buoni */}
+  {(accInfo.buoni || []).length > 0 && (
+    <div className="space-y-2">
+      {accInfo.buoni.map(buono => (
+        <div key={buono.id} className="p-3 bg-yellow-50 border border-yellow-200 rounded flex justify-between items-center">
+          <div className="flex-1">
+            <div className="font-medium text-yellow-900">€ {parseFloat(buono.importo).toFixed(2)}</div>
+            <div className="text-sm text-gray-600">{formatDate(buono.data)} - {buono.descrizione}</div>
+          </div>
+          <button 
+            onClick={() => rimuoviBuono(buono.id)}
+            disabled={saving}
+            className="text-red-600 hover:text-red-800 disabled:opacity-50 ml-3"
+          >
+            🗑️
+          </button>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+
+{/* Sezione MAV / RI.BA */}
+<div className="mb-6">
+  <div className="flex justify-between items-center mb-3">
+    <h4 className="font-semibold text-purple-900">🏦 MAV / RI.BA ({(accInfo.mavRiba || []).length})</h4>
+    <button 
+      onClick={() => setShowMavRibaSection(!showMavRibaSection)}
+      className="bg-purple-600 text-white px-3 py-1 rounded text-sm hover:bg-purple-700"
+    >
+      {showMavRibaSection ? '✕ Chiudi' : '➕ Aggiungi MAV/RI.BA'}
+    </button>
+  </div>
+
+  {showMavRibaSection && (
+    <div className="bg-purple-50 p-4 rounded border border-purple-200 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="block text-sm font-medium mb-1">Tipo</label>
+          <select
+            className="border rounded px-3 py-2 w-full"
+            value={tipoMavRiba}
+            onChange={(e) => setTipoMavRiba(e.target.value)}
+            disabled={saving}
+          >
+            <option value="MAV">MAV</option>
+            <option value="RIBA">RI.BA</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Numero MAV/RI.BA</label>
+          <input 
+            type="text"
+            className="border rounded px-3 py-2 w-full"
+            placeholder="es: MAV123456"
+            value={numeroMavRiba}
+            onChange={(e) => setNumeroMavRiba(e.target.value)}
+            disabled={saving}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-sm font-medium mb-1">Data Emissione</label>
+          <input 
+            type="date"
+            className="border rounded px-3 py-2 w-full"
+            value={dataMavRiba}
+            onChange={(e) => setDataMavRiba(e.target.value)}
+            disabled={saving}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Data Scadenza</label>
+          <input 
+            type="date"
+            className="border rounded px-3 py-2 w-full"
+            value={dataScadenzaMavRiba}
+            onChange={(e) => setDataScadenzaMavRiba(e.target.value)}
+            disabled={saving}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Importo (€)</label>
+          <input 
+            type="number"
+            step="0.01"
+            className="border rounded px-3 py-2 w-full"
+            placeholder="0.00"
+            value={importoMavRiba}
+            onChange={(e) => setImportoMavRiba(e.target.value)}
+            disabled={saving}
+          />
+        </div>
+      </div>
+      <button 
+        onClick={aggiungiMavRiba}
+        disabled={saving}
+        className="mt-3 bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 disabled:opacity-50 w-full"
+      >
+        {saving ? '⏳ Salvataggio...' : '✓ Aggiungi MAV/RI.BA'}
+      </button>
+    </div>
+  )}
+
+  {/* Lista MAV / RI.BA */}
+{(accInfo.mavRiba || []).length > 0 && (
+  <div className="space-y-2">
+    {accInfo.mavRiba.map(mr => {
+      const oggi = new Date();
+      const scadenza = new Date(mr.dataScadenza);
+      const giorniAllaScadenza = Math.ceil((scadenza - oggi) / (1000 * 60 * 60 * 24));
+      
+      let statoClass = 'bg-blue-50 border-blue-200';
+      let statoText = 'In scadenza';
+      let statoColor = 'text-blue-700';
+      
+      if (mr.pagato) {
+        statoClass = 'bg-green-50 border-green-200';
+        statoText = '✓ Pagato';
+        statoColor = 'text-green-700';
+      } else if (giorniAllaScadenza < 0) {
+        statoClass = 'bg-red-50 border-red-200';
+        statoText = '⚠️ Scaduto';
+        statoColor = 'text-red-700';
+      } else if (giorniAllaScadenza <= 7) {
+        statoClass = 'bg-orange-50 border-orange-200';
+        statoText = `⚠️ Scade tra ${giorniAllaScadenza} giorni`;
+        statoColor = 'text-orange-700';
+      }
+      
+      const inPagamento = pagamentoInCorso === mr.id;
+      
+      return (
+        <div key={mr.id} className={`p-3 ${statoClass} border rounded`}>
+          <div className="flex justify-between items-start mb-2">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-medium text-purple-900">{mr.tipo} {mr.numero}</span>
+                <span className={`text-xs font-semibold ${statoColor}`}>{statoText}</span>
+              </div>
+              <div className="text-sm text-gray-600">
+                Scadenza: {formatDate(mr.dataScadenza)}
+              </div>
+              {mr.pagato && mr.dataPagamento && (
+                <div className="text-xs text-green-600 mt-1">
+                  Pagato il: {formatDate(mr.dataPagamento)}
+                </div>
+              )}
+            </div>
+            <div className="text-right">
+              <div className="font-bold text-purple-900">€ {parseFloat(mr.importo).toFixed(2)}</div>
+              {!inPagamento && (
+                <div className="flex gap-1 mt-1">
+                  {!mr.pagato && (
+                    <button 
+                      onClick={() => {
+                        setPagamentoInCorso(mr.id);
+                        setDataPagamentoSelezionata(new Date().toISOString().split('T')[0]);
+                      }}
+                      disabled={saving}
+                      className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 disabled:opacity-50"
+                    >
+                      ✓ Paga
+                    </button>
+                  )}
+                  {mr.pagato && (
+                    <button 
+                      onClick={() => segnaComePagato(mr.id, false, null)}
+                      disabled={saving}
+                      className="text-xs bg-gray-600 text-white px-2 py-1 rounded hover:bg-gray-700 disabled:opacity-50"
+                    >
+                      ✕ Annulla
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => rimuoviMavRiba(mr.id)}
+                    disabled={saving}
+                    className="text-red-600 hover:text-red-800 disabled:opacity-50"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Form per selezionare la data di pagamento */}
+          {inPagamento && (
+            <div className="border-t pt-3 mt-2">
+              <label className="block text-sm font-medium mb-2">Seleziona data di pagamento:</label>
+              <div className="flex gap-2">
+                <input 
+                  type="date"
+                  className="border rounded px-3 py-2 text-sm flex-1"
+                  value={dataPagamentoSelezionata}
+                  onChange={(e) => setDataPagamentoSelezionata(e.target.value)}
+                  disabled={saving}
+                />
+                <button 
+                  onClick={() => segnaComePagato(mr.id, true, dataPagamentoSelezionata)}
+                  disabled={saving}
+                  className="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 disabled:opacity-50"
+                >
+                  ✓ Conferma
+                </button>
+                <button 
+                  onClick={() => {
+                    setPagamentoInCorso(null);
+                    setDataPagamentoSelezionata(new Date().toISOString().split('T')[0]);
+                  }}
+                  disabled={saving}
+                  className="bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 disabled:opacity-50"
+                >
+                  ✕ Annulla
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    })}
+  </div>
+)}
 </div>
         <div className="flex gap-2 mt-6">
           <button 
