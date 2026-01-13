@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
 import { formatDate } from '../utils/dateUtils';
+import { exportAutomezziPDF } from '../utils/exports/exportAutomezziPDF';
 
 function Automezzi() {
   // ✅ USA IL CONTEXT - Nota: la tabella si chiama "veicoli" in Supabase
@@ -36,13 +37,13 @@ function Automezzi() {
     // Converti i campi per Supabase (snake_case)
     const dataForSupabase = {
       targa: formData.targa,
-      marca: formData.marca,
-      modello: formData.modello,
-      anno: formData.anno,
-      tipo: formData.tipo,
-      scadenza_assicurazione: formData.scadenza_assicurazione || formData.scadenzaAssicurazione,
-      scadenza_revisione: formData.scadenza_revisione || formData.scadenzaRevisione,
-      note: formData.note
+      marca: formData.marca || null,
+      modello: formData.modello || null,
+      anno: formData.anno || null,  // ← FIX: stringa vuota → null
+      tipo: formData.tipo || null,
+      scadenza_assicurazione: formData.scadenza_assicurazione || formData.scadenzaAssicurazione || null,  // ← FIX
+      scadenza_revisione: formData.scadenza_revisione || formData.scadenzaRevisione || null,  // ← FIX
+      note: formData.note || null
     };
 
     let result;
@@ -149,6 +150,13 @@ function Automezzi() {
     };
   }, [veicoli]);
 
+  // ✅ ESPORTA PDF
+  const esportaPDF = () => {
+    exportAutomezziPDF({
+      veicoli: filtered
+    });
+  };
+
   return (
     <div className="space-y-4">
       {/* Statistiche */}
@@ -177,24 +185,32 @@ function Automezzi() {
         </div>
       )}
 
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-4">
         <input
           type="text"
           placeholder="🔍 Cerca per targa, marca, modello o tipo..."
-          className="border rounded px-3 py-2 w-96"
+          className="border rounded px-3 py-2 flex-1 max-w-md"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
-        <button
-          onClick={() => {
-            setShowForm(true);
-            setEditingId(null);
-            setFormData({});
-          }}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          ➕ Nuovo Veicolo
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setShowForm(true);
+              setEditingId(null);
+              setFormData({});
+            }}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 whitespace-nowrap"
+          >
+            ➕ Nuovo Veicolo
+          </button>
+          <button
+            onClick={esportaPDF}
+            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 whitespace-nowrap"
+          >
+            📄 Esporta PDF
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -228,11 +244,19 @@ function Automezzi() {
               disabled={saving}
             />
             <input 
-              type="text" 
+              type="number" 
               placeholder="Anno (es: 2020)" 
               className="border rounded px-3 py-2"
+              min="1900"
+              max={new Date().getFullYear() + 1}
               value={formData.anno || ''} 
-              onChange={(e) => setFormData({...formData, anno: e.target.value})}
+              onChange={(e) => {
+                const val = e.target.value;
+                // Accetta solo numeri di 4 cifre o vuoto
+                if (val === '' || (/^\d{0,4}$/.test(val) && parseInt(val) >= 1900)) {
+                  setFormData({...formData, anno: val || null});  // ← Salva null se vuoto
+                }
+              }}
               disabled={saving}
             />
             <select

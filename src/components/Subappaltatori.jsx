@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useData } from '../contexts/DataContext';
 import { validateIBAN } from '../utils/validators';
+import { exportSubappaltatoriPDF } from '../utils/exports/exportSubappaltatoriPDF';
 
 function Subappaltatori() {
   // ✅ USA IL CONTEXT
@@ -111,7 +112,13 @@ function Subappaltatori() {
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
-
+// ✅ ESPORTA PDF
+  const esportaPDF = () => {
+    exportSubappaltatoriPDF({
+      subappaltatori: filtered,
+      cantieri
+    });
+  };
   const filteredSubappaltatori = subappaltatori.filter(sub => {
     if (!filtroCantiereSubappaltatori) return true;
     const cantieriSub = sub.cantieri_ids || [];
@@ -149,16 +156,24 @@ function Subappaltatori() {
             ))}
           </select>
         </div>
-        <button 
-          onClick={() => {
-            setShowForm(true);
-            setEditingId(null);
-            setFormData({ cantieri_ids: [] });
-          }} 
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          ➕ Nuovo Subappaltatore
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => {
+              setShowForm(true);
+              setEditingId(null);
+              setFormData({ cantieri_ids: [] });
+            }} 
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 whitespace-nowrap"
+          >
+            ➕ Nuovo Subappaltatore
+          </button>
+          <button 
+            onClick={esportaPDF}
+            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 whitespace-nowrap"
+          >
+            📄 Esporta PDF
+          </button>
+        </div>
       </div>
 
       {filtered.length > 0 && filtroCantiereSubappaltatori && (

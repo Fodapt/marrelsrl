@@ -12,6 +12,7 @@ import Lavoratori from './components/Lavoratori';
 import Unilav from './components/Unilav';
 import CorsiVisite from './components/CorsiVisite';
 import Automezzi from './components/Automezzi';
+import ManutenzioneMezzi from './components/ManutenzioneMezzi';
 import Subappaltatori from './components/Subappaltatori';
 import Cantieri from './components/Cantieri';
 import Fornitori from './components/Fornitori';
@@ -92,6 +93,7 @@ function AppContent() {
               {activeTab === 'unilav' && <Unilav {...commonProps} />}
               {activeTab === 'corsi' && <CorsiVisite {...commonProps} />}
               {activeTab === 'automezzi' && <Automezzi {...commonProps} />}
+              {activeTab === 'manutenzione-mezzi' && <ManutenzioneMezzi {...commonProps} />}
               {activeTab === 'subappaltatori' && <Subappaltatori {...commonProps} />}
               {activeTab === 'cantieri' && <Cantieri {...commonProps} />}
               {activeTab === 'fornitori' && <Fornitori {...commonProps} />}

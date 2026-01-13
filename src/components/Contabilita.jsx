@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
+import { exportContabilitaPDF } from '../utils/exports/exportContabilitaPDF';
+import { exportPrimaNotaPDF } from '../utils/exports/exportPrimaNotaPDF';
 
 function Contabilita() {
   // ✅ USA IL CONTEXT
@@ -45,54 +47,63 @@ function Contabilita() {
   const [showSaldoInizialeModal, setShowSaldoInizialeModal] = useState(false);
   const [movimentoStornato, setMovimentoStornato] = useState(null);
 
- // Configurazione commissioni
+// Configurazione commissioni
 const [showCommissioniModal, setShowCommissioniModal] = useState(false);
 const commissioniDefault = {
-  bonifico: { tipo: 'fisso', valore: 1.50 },
-  cbill: { tipo: 'fisso', valore: 1.00 },
+  bonifico: { tipo: 'fisso', valore: 1.20 },
+  bonifico_stessa_banca: { tipo: 'fisso', valore: 1.00 },
+  cbill: { tipo: 'fisso', valore: 1.50 },
   f24: { tipo: 'fisso', valore: 0 },
   bollo: { tipo: 'fisso', valore: 0 },
   canone: { tipo: 'fisso', valore: 0 },
   interessi: { tipo: 'fisso', valore: 0 },
   addebito: { tipo: 'fisso', valore: 0 },
   ricarica: { tipo: 'fisso', valore: 0 },
-  riba: { tipo: 'percentuale', valore: 0.5 },
-  mav: { tipo: 'fisso', valore: 1.50 },
+  riba: { tipo: 'percentuale', valore: 0 },
+  mav: { tipo: 'fisso', valore: 0 },
   compensato: { tipo: 'fisso', valore: 0 },
   'f24_compensato': { tipo: 'fisso', valore: 0 },
-  assegno_circolare: { tipo: 'fisso', valore: 5.00 },
-  bonifico_st: { tipo: 'fisso', valore: 10.00 },
+  assegno_circolare: { tipo: 'fisso', valore: 0 },
+  bonifico_st: { tipo: 'fisso', valore: 0 },
   storno: { tipo: 'fisso', valore: 0 },
   f23: { tipo: 'fisso', valore: 0 }
 };
 
 // ✅ Stato commissioni
 const [commissioni, setCommissioni] = useState(commissioniDefault);
-const [commissioniCaricate, setCommissioniCaricate] = useState(false);
 
-// ✅ Sincronizza commissioni da Supabase
+// ✅ Carica commissioni da Supabase SOLO quando settings è caricato
 useEffect(() => {
+  // ⚠️ ASPETTA che settings sia caricato
+  if (loading.secondary) {  // ✅ Usa loading.secondary invece di loading.settings
+  console.log('⏳ Aspetto che settings sia caricato...');
+  return;
+}
+  
   const commissioniSalvate = getSetting('commissioni', null);
   
-  if (commissioniSalvate && !commissioniCaricate) {
+  if (commissioniSalvate) {
     try {
-      const parsed = JSON.parse(commissioniSalvate);
+      const parsed = typeof commissioniSalvate === 'string' 
+        ? JSON.parse(commissioniSalvate) 
+        : commissioniSalvate;
+      
+      console.log('✅ Commissioni caricate da DB:', parsed);
       setCommissioni(parsed);
-      setCommissioniCaricate(true);
-      console.log('✅ Commissioni caricate:', parsed);
     } catch (error) {
-      console.error('❌ Errore commissioni:', error);
+      console.error('❌ Errore parsing commissioni:', error);
+      console.error('Valore ricevuto:', commissioniSalvate);
       setCommissioni(commissioniDefault);
-      setCommissioniCaricate(true);
     }
-  } else if (!commissioniSalvate && !commissioniCaricate) {
+  } else {
+    console.log('ℹ️ Nessuna commissione salvata, uso default');
     setCommissioni(commissioniDefault);
-    setCommissioniCaricate(true);
   }
-}, [getSetting, commissioniCaricate]);
+}, [loading.secondary, getSetting]); 
 
   const tipologieMovimento = [
     { value: 'bonifico', label: 'Bonifico' },
+    { value: 'bonifico_stessa_banca', label: 'Bonifico Stessa Banca' },
     { value: 'cbill', label: 'CBILL' },
     { value: 'f24', label: 'F24' },
     { value: 'bollo', label: 'Bollo' },
@@ -408,7 +419,7 @@ useEffect(() => {
       .sort((a, b) => a.giorniMancanti - b.giorniMancanti);
   }, [movimentiContabili]);
 
-  // ✅ ESPORTA PDF
+  //// ✅ ESPORTA PDF
   const esportaPDF = () => {
     const movimentiMese = movimentiContabili.filter(m => {
       const dataRiferimento = m.data_movimento || m.data_scadenza;
@@ -421,6 +432,7 @@ useEffect(() => {
       return dateA - dateB;
     });
 
+    // Calcola totali
     const totaleEntrateMese = movimentiMese
       .filter(m => m.tipo === 'entrata' && m.tipologia_movimento !== 'storno')
       .reduce((sum, m) => sum + parseFloat(m.importo || 0) + parseFloat(m.commissione || 0), 0);
@@ -448,151 +460,25 @@ useEffect(() => {
     const saldoRealeMese = parseFloat(saldoIniziale) + totaleEntratePagateMese - totaleUscitePagateMese + totaleStorniPagatiMese;
     const saldoPrevistoMese = parseFloat(saldoIniziale) + totaleEntrateMese - totaleUsciteMese + totaleStorniMese;
 
-    const htmlContent = `
-<!DOCTYPE html>
-<html lang="it">
-<head>
-  <meta charset="UTF-8">
-  <title>Report Contabilità - ${mesiNomi[meseReport - 1]} ${annoReport}</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    h1 { color: #1e40af; border-bottom: 3px solid #1e40af; padding-bottom: 10px; text-align: center; }
-    .info { background: #eff6ff; padding: 15px; border-radius: 5px; margin: 20px 0; }
-    table { border-collapse: collapse; width: 100%; margin: 20px 0; font-size: 11px; }
-    th, td { border: 1px solid #333; padding: 8px; text-align: left; }
-    th { background-color: #3b82f6; color: white; font-weight: bold; }
-    tr:nth-child(even) { background-color: #f3f4f6; }
-    .entrata { background-color: #d1fae5 !important; }
-    .uscita { background-color: #fee2e2 !important; }
-    .totali { background: #dbeafe; padding: 15px; border-radius: 5px; margin: 20px 0; }
-    .totali-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
-    .totale-card { border: 2px solid; border-radius: 8px; padding: 15px; }
-    .totale-card.entrate { background: #d1fae5; border-color: #10b981; }
-    .totale-card.uscite { background: #fee2e2; border-color: #ef4444; }
-    .totale-card.saldo-reale { background: #e0e7ff; border-color: #6366f1; }
-    .totale-card.saldo-previsto { background: #fef3c7; border-color: #f59e0b; }
-    .totale-label { font-size: 12px; color: #374151; margin-bottom: 5px; }
-    .totale-valore { font-size: 24px; font-weight: bold; color: #1f2937; }
-    .footer { margin-top: 40px; text-align: center; color: #666; font-size: 11px; border-top: 1px solid #ccc; padding-top: 20px; }
-    @media print {
-      .no-print { display: none; }
-      body { margin: 0; }
-    }
-  </style>
-</head>
-<body>
-  <button class="no-print" onclick="window.print()" style="background: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px; font-size: 14px;">
-    🖨️ Stampa / Salva PDF
-  </button>
-  
-  <h1>📊 Report Contabilità - ${mesiNomi[meseReport - 1]} ${annoReport}</h1>
-  
-  <div class="info">
-    <strong>Azienda:</strong> Marrel S.r.l.<br>
-    <strong>Periodo:</strong> ${mesiNomi[meseReport - 1]} ${annoReport}<br>
-    <strong>Data generazione:</strong> ${new Date().toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}<br>
-    <strong>Movimenti totali:</strong> ${movimentiMese.length}
-  </div>
-  
-  <table>
-    <thead>
-      <tr>
-        <th>Data Movimento</th>
-        <th>Tipo</th>
-        <th>Tipologia</th>
-        <th>Fornitore / Cliente</th>
-        <th>Cantiere</th>
-        <th>Causale</th>
-        <th>Importo</th>
-        <th>Comm.</th>
-        <th>Totale</th>
-        <th>Saldo</th>
-        <th>Scadenza</th>
-        <th>Stato</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tbody>
-      ${(() => {
-        let saldoProgressivo = parseFloat(saldoIniziale);
-        return movimentiMese.map(mov => {
-          const fornitore = fornitori.find(f => f.id === mov.fornitore_id);
-          const cliente = clienti.find(c => c.id === mov.cliente_id);
-          const cantiere = cantieri.find(c => c.id === mov.cantiere_id);
-          const tipologia = tipologieMovimento.find(t => t.value === mov.tipologia_movimento);
-          const totale = parseFloat(mov.importo || 0) + parseFloat(mov.commissione || 0);
-          
-          // Calcola saldo progressivo solo per movimenti pagati
-          if (mov.pagato) {
-            if (mov.tipologia_movimento === 'storno') {
-              saldoProgressivo += totale;
-            } else if (mov.tipo === 'entrata') {
-              saldoProgressivo += totale;
-            } else {
-              saldoProgressivo -= totale;
-            }
-          }
-          
-          return `
-        <tr class="${mov.tipo}">
-          <td>${formatDate(mov.data_movimento)}</td>
-          <td>${mov.tipo === 'entrata' ? '⬆️ Entrata' : '⬇️ Uscita'}</td>
-          <td>${tipologia?.label || mov.tipologia_movimento}</td>
-          <td>${mov.tipo === 'entrata' ? (cliente?.ragione_sociale || '-') : (fornitore?.ragione_sociale || '-')}</td>
-          <td>${cantiere?.nome || '-'}</td>
-          <td>${mov.causale || '-'}</td>
-          <td style="text-align: right;">€ ${parseFloat(mov.importo || 0).toFixed(2)}</td>
-          <td style="text-align: right;">€ ${parseFloat(mov.commissione || 0).toFixed(2)}</td>
-          <td style="text-align: right; font-weight: bold;">€ ${totale.toFixed(2)}</td>
-          <td style="text-align: right; font-weight: bold;">€ ${saldoProgressivo.toFixed(2)}</td>
-          <td>${mov.tipo === 'uscita' ? formatDate(mov.data_scadenza) : '-'}</td>
-          <td>${mov.pagato ? '✅ Pagato' : '⏳ Da pagare'}</td>
-        </tr>
-        `;
-        }).join('');
-      })()}
-    </tbody>
-  </table>
-  
-  <div class="totali">
-    <h2 style="margin-top: 0;">💰 Riepilogo Mensile</h2>
-    <div class="totali-grid">
-      <div class="totale-card entrate">
-        <div class="totale-label">Totale Entrate</div>
-        <div class="totale-valore">€ ${totaleEntrateMese.toFixed(2)}</div>
-      </div>
-      <div class="totale-card uscite">
-        <div class="totale-label">Totale Uscite</div>
-        <div class="totale-valore">€ ${totaleUsciteMese.toFixed(2)}</div>
-      </div>
-      <div class="totale-card" style="background: #e5e7eb; border-color: #6b7280;">
-        <div class="totale-label">Totale Storni</div>
-        <div class="totale-valore">€ ${totaleStorniMese.toFixed(2)}</div>
-      </div>
-      <div class="totale-card saldo-reale">
-        <div class="totale-label">Saldo Reale (movimenti pagati)</div>
-        <div class="totale-valore">€ ${saldoRealeMese.toFixed(2)}</div>
-      </div>
-      <div class="totale-card saldo-previsto">
-        <div class="totale-label">Saldo Previsto (tutti i movimenti)</div>
-        <div class="totale-valore">€ ${saldoPrevistoMese.toFixed(2)}</div>
-      </div>
-    </div>
-  </div>
-  
-  <div class="footer">
-    <p>Gestionale Marrel S.r.l. - Report Contabilità</p>
-    <p>Documento generato automaticamente dal sistema</p>
-  </div>
-</body>
-</html>
-    `;
-
-    const newWindow = window.open('', '_blank');
-    newWindow.document.write(htmlContent);
-    newWindow.document.close();
+    exportContabilitaPDF({
+      movimentiMese,
+      fornitori,
+      clienti,
+      cantieri,
+      tipologieMovimento,
+      mese: mesiNomi[meseReport - 1],
+      anno: annoReport,
+      saldoIniziale,
+      totali: {
+        totaleEntrateMese,
+        totaleUsciteMese,
+        totaleStorniMese,
+        saldoRealeMese,
+        saldoPrevistoMese
+      }
+    });
   };
-    // ✅ INCOLLA QUI LA NUOVA FUNZIONE
+    // ✅ ESPORTA PRIMA NOTA
   const esportaPrimaNota = () => {
     const movimentiMese = movimentiContabili.filter(m => {
       const dataRiferimento = m.data_movimento || m.data_scadenza;
@@ -605,108 +491,16 @@ useEffect(() => {
       return dateA - dateB;
     });
 
-    const htmlContent = `
-<!DOCTYPE html>
-<html lang="it">
-<head>
-  <meta charset="UTF-8">
-  <title>Prima Nota - ${mesiNomi[meseReport - 1]} ${annoReport}</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    h1 { color: #1e40af; border-bottom: 3px solid #1e40af; padding-bottom: 10px; text-align: center; }
-    .info { background: #eff6ff; padding: 15px; border-radius: 5px; margin: 20px 0; }
-    table { border-collapse: collapse; width: 100%; margin: 20px 0; font-size: 11px; }
-    th, td { border: 1px solid #333; padding: 8px; text-align: left; }
-    th { background-color: #3b82f6; color: white; font-weight: bold; }
-    tr:nth-child(even) { background-color: #f3f4f6; }
-    .entrata { background-color: #d1fae5 !important; }
-    .uscita { background-color: #fee2e2 !important; }
-    .footer { margin-top: 40px; text-align: center; color: #666; font-size: 11px; border-top: 1px solid #ccc; padding-top: 20px; }
-    @media print {
-      .no-print { display: none; }
-      body { margin: 0; }
-    }
-  </style>
-</head>
-<body>
-  <button class="no-print" onclick="window.print()" style="background: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px; font-size: 14px;">
-    🖨️ Stampa / Salva PDF
-  </button>
-  
-  <h1>📋 Prima Nota - ${mesiNomi[meseReport - 1]} ${annoReport}</h1>
-  
-  <div class="info">
-    <strong>Azienda:</strong> Marrel S.r.l.<br>
-    <strong>Periodo:</strong> ${mesiNomi[meseReport - 1]} ${annoReport}<br>
-    <strong>Data generazione:</strong> ${new Date().toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}<br>
-    <strong>Movimenti pagati:</strong> ${movimentiMese.length}
-  </div>
-  
-  <table>
-    <thead>
-      <tr>
-        <th>Data Movimento</th>
-        <th>Tipo</th>
-        <th>Tipologia</th>
-        <th>Fornitore / Cliente</th>
-        <th>Cantiere</th>
-        <th>Causale</th>
-        <th>Importo</th>
-        <th>Comm.</th>
-        <th>Totale</th>
-        <th>Saldo</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tbody>
-      ${(() => {
-        let saldoProgressivo = parseFloat(saldoIniziale);
-        return movimentiMese.map(mov => {
-          const fornitore = fornitori.find(f => f.id === mov.fornitore_id);
-          const cliente = clienti.find(c => c.id === mov.cliente_id);
-          const cantiere = cantieri.find(c => c.id === mov.cantiere_id);
-          const tipologia = tipologieMovimento.find(t => t.value === mov.tipologia_movimento);
-          const totale = parseFloat(mov.importo || 0) + parseFloat(mov.commissione || 0);
-          
-          // Calcola saldo progressivo (tutti i movimenti nella prima nota sono pagati)
-          if (mov.tipologia_movimento === 'storno') {
-            saldoProgressivo += totale;
-          } else if (mov.tipo === 'entrata') {
-            saldoProgressivo += totale;
-          } else {
-            saldoProgressivo -= totale;
-          }
-          
-          return `
-        <tr class="${mov.tipo}">
-          <td>${formatDate(mov.data_movimento)}</td>
-          <td>${mov.tipo === 'entrata' ? '⬆️ Entrata' : '⬇️ Uscita'}</td>
-          <td>${tipologia?.label || mov.tipologia_movimento}</td>
-          <td>${mov.tipo === 'entrata' ? (cliente?.ragione_sociale || '-') : (fornitore?.ragione_sociale || '-')}</td>
-          <td>${cantiere?.nome || '-'}</td>
-          <td>${mov.causale || '-'}</td>
-          <td style="text-align: right;">€ ${parseFloat(mov.importo || 0).toFixed(2)}</td>
-          <td style="text-align: right;">€ ${parseFloat(mov.commissione || 0).toFixed(2)}</td>
-          <td style="text-align: right; font-weight: bold;">€ ${totale.toFixed(2)}</td>
-          <td style="text-align: right; font-weight: bold;">€ ${saldoProgressivo.toFixed(2)}</td>
-        </tr>
-        `;
-        }).join('');
-      })()}
-    </tbody>
-  </table>
-  
-  <div class="footer">
-    <p>Gestionale Marrel S.r.l. - Prima Nota</p>
-    <p>Documento generato automaticamente dal sistema - Solo movimenti pagati</p>
-  </div>
-</body>
-</html>
-    `;
-
-    const newWindow = window.open('', '_blank');
-    newWindow.document.write(htmlContent);
-    newWindow.document.close();
+    exportPrimaNotaPDF({
+      movimentiMese,
+      fornitori,
+      clienti,
+      cantieri,
+      tipologieMovimento,
+      mese: mesiNomi[meseReport - 1],
+      anno: annoReport,
+      saldoIniziale
+    });
   };
   return (
     <div className="space-y-4">
@@ -1358,46 +1152,70 @@ useEffect(() => {
                     <div className="font-medium mb-2">{tip.label}</div>
                     <div className="flex gap-2">
                       <select 
-                        className="border rounded px-2 py-1 text-sm"
-                        value={commissioni[tip.value]?.tipo || 'fisso'}
-                        onChange={(e) => setCommissioni({
-                          ...commissioni,
-                          [tip.value]: { ...commissioni[tip.value], tipo: e.target.value }
-                        })}
-                      >
+  className="border rounded px-2 py-1 text-sm"
+  value={commissioni[tip.value]?.tipo || 'fisso'}
+  onChange={(e) => {
+    const nuovoTipo = e.target.value;
+    console.log(`📝 Cambio tipo ${tip.value}:`, nuovoTipo);
+    
+    setCommissioni(prev => ({
+      ...prev,
+      [tip.value]: { 
+        ...prev[tip.value], 
+        tipo: nuovoTipo 
+      }
+    }));
+  }}
+>
                         <option value="fisso">Fisso (€)</option>
                         <option value="percentuale">Percentuale (%)</option>
                       </select>
                       <input 
-                        type="number" 
-                        step="0.01" 
-                        className="border rounded px-2 py-1 text-sm flex-1"
-                        value={commissioni[tip.value]?.valore || 0}
-                        onChange={(e) => setCommissioni({
-                          ...commissioni,
-                          [tip.value]: { ...commissioni[tip.value], valore: e.target.value }
-                        })} 
-                      />
+  type="number" 
+  step="0.01" 
+  className="border rounded px-2 py-1 text-sm flex-1"
+  value={commissioni[tip.value]?.valore || 0}
+  onChange={(e) => {
+    const nuovoValore = e.target.value;
+    console.log(`📝 Cambio ${tip.value}:`, nuovoValore);
+    
+    setCommissioni(prev => ({
+      ...prev,
+      [tip.value]: { 
+        tipo: prev[tip.value]?.tipo || 'fisso', 
+        valore: nuovoValore 
+      }
+    }));
+  }} 
+/>
                     </div>
                   </div>
                 ))}
               </div>
               <div className="flex gap-2 mt-4">
                 <button 
-                  onClick={async () => {
-                    const result = await setSetting('commissioni', JSON.stringify(commissioni));
-                    
-                    if (result.success) {
-                      alert('✅ Commissioni salvate!');
-                      setShowCommissioniModal(false);
-                    } else {
-                      alert('❌ Errore: ' + result.error);
-                    }
-                  }}
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                >
-                  ✓ Salva Configurazione
-                </button>
+  onClick={async () => {
+    // ✅ DEBUG: stampa lo stato prima di salvare
+    console.log('🔍 STATO COMMISSIONI PRIMA DI SALVARE:', commissioni);
+    console.log('🔍 CBILL VALORE:', commissioni.cbill);
+    console.log('🔍 JSON STRINGIFICATO:', JSON.stringify(commissioni));
+    
+    const result = await setSetting('commissioni', JSON.stringify(commissioni));
+    
+    if (result.success) {
+      console.log('✅ Salvato su DB:', result);
+      alert('✅ Commissioni salvate!');
+      setShowCommissioniModal(false);
+      window.location.reload();
+    } else {
+      console.error('❌ Errore salvataggio:', result.error);
+      alert('❌ Errore: ' + result.error);
+    }
+  }}
+  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+>
+  ✓ Salva Configurazione
+</button>
                 <button 
                   onClick={() => setShowCommissioniModal(false)}
                   className="px-4 py-2 border rounded hover:bg-gray-50"

@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
 import { isFestivita } from '../utils/dateUtils';
+import { exportPresenzePDF } from '../utils/exports/exportPresenzePDF';
 
 function PresenzeCantieri() {
   const {
@@ -834,192 +835,27 @@ return (
       </div>
 
 
-   {/* Pulsante Esporta PDF */}
+  {/* Pulsante Esporta PDF */}
       <div className="bg-white rounded-lg shadow p-4">
         <button 
           onClick={() => {
             const lavoratore = lavoratori.find(l => l.id === selectedWorker);
             const nomeLavoratore = lavoratore ? `${lavoratore.cognome} ${lavoratore.nome}` : 'Lavoratore';
-            const meseName = mesi[selectedMonth];
             
-            const htmlContent = `
-<!DOCTYPE html>
-<html lang="it">
-<head>
-  <meta charset="UTF-8">
-  <title>Presenze ${meseName} ${selectedYear} - ${nomeLavoratore}</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    h1 { color: #2563eb; border-bottom: 3px solid #2563eb; padding-bottom: 10px; text-align: center; }
-    .info { background: #eff6ff; padding: 15px; border-radius: 5px; margin: 20px 0; text-align: center; }
-    .calendario { margin: 30px 0; }
-    .settimana { margin-bottom: 30px; page-break-inside: avoid; }
-    .settimana-title { font-weight: bold; color: #4b5563; margin-bottom: 10px; font-size: 14px; }
-    .giorni-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
-    .giorno-card { border: 2px solid #d1d5db; border-radius: 8px; padding: 10px; min-height: 80px; }
-    .giorno-card.lavoro { background: #dcfce7; border-color: #22c55e; }
-    .giorno-card.lavoro-permesso { background: #fed7aa; border-color: #f97316; }
-    .giorno-card.malattia { background: #fecaca; border-color: #ef4444; }
-    .giorno-card.ferie { background: #bfdbfe; border-color: #3b82f6; }
-    .giorno-card.festivita { background: #e9d5ff; border-color: #a855f7; }
-    .giorno-card.assenza { background: #e5e7eb; border-color: #6b7280; }
-    .giorno-card.pioggia { background: #fef08a; border-color: #eab308; }
-    .giorno-card.weekend { background: #f3f4f6; }
-    .giorno-header { font-weight: bold; font-size: 12px; color: #374151; margin-bottom: 5px; }
-    .giorno-tipo { font-weight: 600; font-size: 13px; color: #1f2937; }
-    .giorno-ore { font-size: 11px; color: #4b5563; }
-    .giorno-permesso { font-size: 10px; color: #ea580c; font-weight: bold; }
-    .giorno-cantiere { font-size: 10px; color: #6b7280; margin-top: 3px; }
-    .riepilogo { margin-top: 40px; }
-    .riepilogo h2 { color: #1f2937; font-size: 20px; margin-bottom: 20px; }
-    .riepilogo-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }
-    .riepilogo-card { border: 2px solid; border-radius: 8px; padding: 15px; }
-    .riepilogo-card.lavoro { background: #dcfce7; border-color: #22c55e; }
-    .riepilogo-card.malattia { background: #fecaca; border-color: #ef4444; }
-    .riepilogo-card.ferie { background: #bfdbfe; border-color: #3b82f6; }
-    .riepilogo-card.festivita { background: #e9d5ff; border-color: #a855f7; }
-    .riepilogo-card.assenza { background: #e5e7eb; border-color: #6b7280; }
-    .riepilogo-card.pioggia { background: #fef08a; border-color: #eab308; }
-    .riepilogo-card.permesso { background: #fed7aa; border-color: #f97316; }
-    .riepilogo-label { font-size: 12px; color: #4b5563; margin-bottom: 5px; }
-    .riepilogo-valore { font-size: 24px; font-weight: bold; color: #1f2937; }
-    .riepilogo-sub { font-size: 11px; color: #6b7280; margin-top: 3px; }
-    .dettaglio-cantieri { margin-top: 20px; }
-    .dettaglio-cantieri h3 { font-size: 16px; color: #1f2937; margin-bottom: 15px; }
-    .cantiere-item { display: flex; justify-content: space-between; padding: 12px; background: #f9fafb; border-radius: 6px; margin-bottom: 8px; }
-    .footer { margin-top: 40px; text-align: center; color: #6b7280; font-size: 11px; border-top: 1px solid #d1d5db; padding-top: 20px; }
-    @media print { .no-print { display: none; } body { margin: 0; } }
-  </style>
-</head>
-<body>
-  <button class="no-print" onclick="window.print()" style="background: #2563eb; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px;">
-    🖨️ Stampa / Salva PDF
-  </button>
-  
-  <h1>Presenze ${meseName} ${selectedYear} - ${nomeLavoratore}</h1>
-  
-  <div class="info">
-    <strong>Periodo:</strong> ${meseName} ${selectedYear}<br>
-    <strong>Data generazione:</strong> ${new Date().toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-  </div>
-  
-  ${notaMensile ? `
-    <div class="nota-mensile" style="background:#fef9c3; padding:15px; border-radius:8px; border:1px solid #facc15; margin:20px 0;">
-      <strong>📝 Nota Mensile:</strong><br>
-      <div style="white-space:pre-wrap; margin-top:8px; font-size:13px; color:#444;">
-        ${notaMensile}
-      </div>
-    </div>
-  ` : ''}
-
-  <div class="calendario">
-    ${[1, 2, 3, 4, 5].map(weekNum => {
-      const weekDays = daysInMonth.filter(day => getWeekNumber(day) === weekNum);
-      if (weekDays.length === 0) return '';
-      
-      const weekHtml = weekDays.map(day => {
-        const presenza = getPresenzaForDate(selectedWorker, day);
-        const tipoInfo = presenza ? getTipoInfo(presenza.tipo) : null;
-        const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-        const dateStr = formatDateShort(day);
-        const ore = parseFloat(presenza?.ore || 0);
-        const hasPermesso = presenza?.tipo === 'lavoro' && ore < 8;
-        
-        let cardClass = 'giorno-card';
-        if (presenza) {
-          if (hasPermesso) {
-            cardClass += ' lavoro-permesso';
-          } else {
-            cardClass += ' ' + presenza.tipo;
-          }
-        } else if (isWeekend) {
-          cardClass += ' weekend';
-        }
-        
-        let content = '<div class="' + cardClass + '">';
-        content += '<div class="giorno-header">' + dateStr + '</div>';
-        
-        if (presenza) {
-          content += '<div class="giorno-tipo">' + tipoInfo.label + '</div>';
-          if (presenza.ore) {
-            content += '<div class="giorno-ore">' + presenza.ore + ' ore' + (presenza.tipo === 'lavoro' ? ' lav.' : '') + '</div>';
-            if (hasPermesso) {
-              content += '<div class="giorno-permesso">(-' + (8 - ore).toFixed(1) + 'h permesso)</div>';
-            }
-          }
-          if (presenza.ore_pioggia && parseFloat(presenza.ore_pioggia) > 0) {
-            content += '<div class="giorno-ore" style="color: #ca8a04;">☔ ' + presenza.ore_pioggia + ' ore pioggia</div>';
-          }
-          if (presenza.cantiere_id) {
-            content += '<div class="giorno-cantiere">' + getCantiereName(presenza.cantiere_id) + '</div>';
-          }
-        }
-        content += '</div>';
-        return content;
-      }).join('');
-      
-      return '<div class="settimana"><div class="settimana-title">Settimana ' + weekNum + '</div><div class="giorni-grid">' + weekHtml + '</div></div>';
-    }).join('')}
-  </div>
-  
-  <div class="riepilogo">
-    <h2>Riepilogo Mensile</h2>
-    <div class="riepilogo-grid">
-      <div class="riepilogo-card lavoro">
-        <div class="riepilogo-label">Ore Lavorate</div>
-        <div class="riepilogo-valore">${riepilogo.oreLavoro.toFixed(1)} h</div>
-        <div class="riepilogo-sub">${riepilogo.giorniLavoro} giorni</div>
-      </div>
-      <div class="riepilogo-card malattia">
-        <div class="riepilogo-label">Giorni Malattia</div>
-        <div class="riepilogo-valore">${riepilogo.giorniMalattia}</div>
-      </div>
-      <div class="riepilogo-card ferie">
-        <div class="riepilogo-label">Giorni Ferie</div>
-        <div class="riepilogo-valore">${riepilogo.giorniFerie}</div>
-      </div>
-      <div class="riepilogo-card festivita">
-        <div class="riepilogo-label">Festività</div>
-        <div class="riepilogo-valore">${riepilogo.giorniFestivita}</div>
-      </div>
-      <div class="riepilogo-card assenza">
-        <div class="riepilogo-label">Giorni Assenza</div>
-        <div class="riepilogo-valore">${riepilogo.giorniAssenza}</div>
-      </div>
-      <div class="riepilogo-card pioggia">
-        <div class="riepilogo-label">Ore Pioggia</div>
-        <div class="riepilogo-valore">${riepilogo.orePioggia.toFixed(1)} h</div>
-      </div>
-      <div class="riepilogo-card permesso">
-        <div class="riepilogo-label">Ore Permesso</div>
-        <div class="riepilogo-valore">${riepilogo.orePermesso.toFixed(1)} h</div>
-        <div class="riepilogo-sub">ore < 8</div>
-      </div>
-    </div>
-    
-    ${Object.keys(riepilogo.cantieri).length > 0 ? `
-      <div class="dettaglio-cantieri">
-        <h3>Dettaglio per Cantiere</h3>
-        ${Object.entries(riepilogo.cantieri).map(([cantiereId, ore]) => `
-          <div class="cantiere-item">
-            <span class="cantiere-nome">${getCantiereName(cantiereId)}</span>
-            <span class="cantiere-ore">${ore.toFixed(1)} ore</span>
-          </div>
-        `).join('')}
-      </div>
-    ` : ''}
-  </div>
-  
-  <div class="footer">
-    <p>Gestionale Marrel S.r.l. - Report Presenze</p>
-    <p>Documento generato automaticamente dal sistema</p>
-  </div>
-</body>
-</html>
-            `;
-            const newWindow = window.open('', '_blank');
-            newWindow.document.write(htmlContent);
-            newWindow.document.close();
+            exportPresenzePDF({
+              nomeLavoratore,
+              mese: selectedMonth,
+              anno: selectedYear,
+              meseName: mesi[selectedMonth],
+              daysInMonth,
+              getPresenzaForDate: (day) => getPresenzaForDate(selectedWorker, day),
+              getTipoInfo,
+              getCantiereName,
+              getWeekNumber,
+              formatDateShort,
+              riepilogo,
+              notaMensile
+            });
           }} 
           className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-center font-semibold"
         >

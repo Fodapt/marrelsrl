@@ -40,7 +40,8 @@ export const DataProvider = ({ children }) => {
     cassaEdileLavoratori: [],
     cassaEdileTotali: [],
     ordiniFornitori: [],
-    documenti: []
+    documenti: [],
+    manutenzioniVeicoli: []
   });
 
   const [loading, setLoading] = useState({
@@ -87,7 +88,8 @@ export const DataProvider = ({ children }) => {
     cassaEdileLavoratori: 'cassa_edile_lavoratori',
     cassaEdileTotali: 'cassa_edile_totali',
     ordiniFornitori: 'ordini_fornitori',
-    documenti: 'documenti'
+    documenti: 'documenti',
+    manutenzioniVeicoli: 'manutenzioni_veicoli' 
   };
 
   const criticalTables = ['lavoratori', 'cantieri', 'fornitori', 'clienti'];

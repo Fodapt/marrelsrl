@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
+import { exportRateizziPDF } from '../utils/exports/exportRateizziPDF';
 
 function Rateizzi() {
   const {
@@ -54,7 +55,7 @@ function Rateizzi() {
   const rate = rateizzo.rate || [];
   
   const totale = rate.reduce((sum, r) => sum + parseFloat(r.importo || 0), 0);
-  const pagato = rate.filter(r => r.stato === 'pagato').reduce((sum, r) => sum + parseFloat(r.importo || 0), 0);
+  const pagato = rate.filter(r => calcolaStato(r) === 'pagato').reduce((sum, r) => sum + parseFloat(r.importo || 0), 0); // ← CHIAMA calcolaStato(r)
   const rimanente = totale - pagato;
   return { totale, pagato, rimanente };
 };
@@ -222,21 +223,34 @@ function Rateizzi() {
     setRataSelezionata(null);
     setNotaCorrente('');
   };
-
+// ✅ ESPORTA PDF
+  const esportaPDF = () => {
+    exportRateizziPDF({
+      rateizzi,
+      noteRateizzi
+    });
+  };
   return (
     <div className="space-y-4">
-      <button 
-        onClick={() => {
-          setShowForm(true);
-          setEditingId(null);
-          setFormData({ nome: '', rate: [] });
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }} 
-        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-      >
-        ➕ Nuovo Rateizzo
-      </button>
-
+      <div className="flex gap-2">
+        <button 
+          onClick={() => {
+            setShowForm(true);
+            setEditingId(null);
+            setFormData({ nome: '', rate: [] });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }} 
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
+          ➕ Nuovo Rateizzo
+        </button>
+        <button 
+          onClick={esportaPDF}
+          className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+        >
+          📄 Esporta PDF
+        </button>
+      </div>
       {/* Riepilogo Totale */}
       {rateizzi.length > 0 && (
         <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-6 rounded-lg shadow-lg border-2 border-blue-300">
@@ -317,7 +331,48 @@ function Rateizzi() {
 
             {(formData.rate || []).length > 0 && (
               <div className="border rounded p-4 max-h-96 overflow-y-auto">
-                <h4 className="font-semibold mb-3">Rate generate ({formData.rate.length}):</h4>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold">Rate generate ({formData.rate.length}):</h4>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const primaData = formData.rate[0]?.dataScadenza;
+                        if (!primaData) {
+                          return alert('⚠️ Inserisci prima la data della Rata 1');
+                        }
+                        const newRate = [...formData.rate];
+                        const dataBase = new Date(primaData);
+                        for (let i = 1; i < newRate.length; i++) {
+                          const nuovaData = new Date(dataBase);
+                          nuovaData.setMonth(dataBase.getMonth() + i);
+                          newRate[i].dataScadenza = nuovaData.toISOString().split('T')[0];
+                        }
+                        setFormData({...formData, rate: newRate});
+                      }}
+                      className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
+                      title="Copia la data della Rata 1 nelle successive con progressione mensile"
+                    >
+                      📅 Copia Date
+                    </button>
+                    <button
+                      onClick={() => {
+                        const primoImporto = formData.rate[0]?.importo;
+                        if (!primoImporto) {
+                          return alert('⚠️ Inserisci prima l\'importo della Rata 1');
+                        }
+                        const newRate = [...formData.rate];
+                        for (let i = 1; i < newRate.length; i++) {
+                          newRate[i].importo = primoImporto;
+                        }
+                        setFormData({...formData, rate: newRate});
+                      }}
+                      className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600"
+                      title="Copia l'importo della Rata 1 in tutte le successive"
+                    >
+                      💰 Copia Importi
+                    </button>
+                  </div>
+                </div>
                 <div className="space-y-3">
                   {formData.rate.map((rata, idx) => (
                     <div key={rata.id} className="border rounded p-3 bg-gray-50">

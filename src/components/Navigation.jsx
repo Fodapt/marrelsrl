@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { APP_CONFIG } from "../config/appConfig"; 
 
 function Navigation({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
   const { profile } = useAuth();
@@ -75,7 +76,7 @@ function Navigation({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
       icon: "🏦",
       type: "group",
       subtabs: filterSubtabsByRole([
-        { id: "contabilita", label: "Prima Nota", icon: "🏦" },
+        { id: "contabilita", label: "Banca", icon: "🏦" },
         { id: "casse", label: "Cassa Edile", icon: "💶" },
         { id: "rateizzi", label: "Rateizzi", icon: "💳" },
       ]),
@@ -83,6 +84,7 @@ function Navigation({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
 
     // 🚛 AUTOMEZZI (single, non più group)
 { id: "automezzi", label: "Automezzi", icon: "🚛", type: "single" },
+{ id: "manutenzione-mezzi", label: "Manutenzioni Mezzi", icon: "🔧", type: "single" },
     { id: "certificazioni", label: "Certificazioni", icon: "📋", type: "single" },
     { id: "scadenzario", label: "Scadenzario", icon: "📅", type: "single" },
   ];
@@ -181,10 +183,10 @@ function Navigation({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
         </nav>
 
       {/* Versione in basso */}
-      <div className="mt-auto p-4 border-t border-gray-200 bg-gray-50">
-        <p className="text-xs text-gray-500 text-center">versione 4.4</p>
-        <p className="text-xs text-gray-400 text-center">{profile?.azienda}</p>
-      </div>
+<div className="mt-auto p-4 border-t border-gray-200 bg-gray-50">
+  <p className="text-xs text-gray-500 text-center">{APP_CONFIG.versionText}</p>
+  <p className="text-xs text-gray-400 text-center">{profile?.azienda}</p>
+</div>
     </aside>
     </>
   );

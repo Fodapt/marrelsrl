@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
+import { exportSALPDF } from '../utils/exports/exportSALPDF'; 
 
 function SAL() {
   const {
@@ -39,11 +40,25 @@ function SAL() {
     const numeroSAL = salCantiere.length;
     
     const cantiere = cantieri.find(c => c.id === filtroCantiere);
-    const importoLavori = cantiere ? parseFloat(cantiere.importo_lavori) || 0 : 0;
-    const percentualeAvanzamento = importoLavori > 0 ? ((totaleImporto / importoLavori) * 100).toFixed(2) : 0;
-    const rimanente = importoLavori - totaleImporto;
+    
+    // ✅ CALCOLO DINAMICO BASATO SULLA MODALITÀ
+    const modalita = cantiere?.modalita_calcolo_sal || 'solo_lavori';
+    const importoBase = modalita === 'contratto_completo' 
+      ? parseFloat(cantiere?.importo_contratto || 0)
+      : parseFloat(cantiere?.importo_lavori || 0);
+    
+    const percentualeAvanzamento = importoBase > 0 ? ((totaleImporto / importoBase) * 100).toFixed(2) : 0;
+    const rimanente = importoBase - totaleImporto;
 
-    return { totaleImporto, numeroSAL, percentualeAvanzamento, importoLavori, rimanente };
+    return { 
+      totaleImporto, 
+      numeroSAL, 
+      percentualeAvanzamento, 
+      importoBase, 
+      rimanente,
+      modalita,
+      labelImporto: modalita === 'contratto_completo' ? 'Importo Contratto' : 'Importo Lavori'
+    };
   }, [sal, filtroCantiere, cantieri]);
 
   // ✅ MOSTRA LOADING
@@ -125,22 +140,39 @@ function SAL() {
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+// ✅ ESPORTA PDF  ← METTI QUI!
+  const esportaPDF = () => {
+    exportSALPDF({
+      sal: salFiltrati,
+      cantieri
+    });
+  };
 
-  return (
+ return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <button 
-          onClick={() => {
-            setShowForm(true);
-            setEditingId(null);
-            setFormData({});
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }} 
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          ➕ Nuovo SAL
-        </button>
+        {/* PULSANTI A SINISTRA */}
+        <div className="flex gap-2">
+          <button 
+            onClick={() => {
+              setShowForm(true);
+              setEditingId(null);
+              setFormData({});
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }} 
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            ➕ Nuovo SAL
+          </button>
+          <button 
+            onClick={esportaPDF}
+            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+          >
+            📄 Esporta PDF
+          </button>
+        </div>
 
+        {/* FILTRO A DESTRA */}
         <div className="flex items-center gap-3">
           <label className="text-sm font-medium">Filtra per Cantiere:</label>
           <select 
@@ -176,8 +208,11 @@ function SAL() {
               <div className="text-2xl font-bold text-blue-900">{riepilogoCantiere.numeroSAL}</div>
             </div>
             <div className="bg-white p-4 rounded-lg shadow">
-              <div className="text-sm text-blue-700 mb-1">Importo Lavori</div>
-              <div className="text-xl font-bold text-blue-900">€ {riepilogoCantiere.importoLavori.toFixed(2)}</div>
+              <div className="text-sm text-blue-700 mb-1">{riepilogoCantiere.labelImporto}</div>
+              <div className="text-xl font-bold text-blue-900">€ {riepilogoCantiere.importoBase.toFixed(2)}</div>
+              {riepilogoCantiere.modalita === 'contratto_completo' && (
+                <div className="text-xs text-gray-500 mt-1">Include oneri sicurezza</div>
+              )}
             </div>
             <div className="bg-white p-4 rounded-lg shadow">
               <div className="text-sm text-green-700 mb-1">Totale SAL</div>
@@ -244,7 +279,12 @@ function SAL() {
                 onChange={(e) => {
                   const imp = parseFloat(e.target.value) || 0;
                   const cant = cantieri.find(c => c.id === formData.cantiereId);
-                  const tot = cant ? parseFloat(cant.importo_lavori) || 0 : 0;
+                  
+                  // ✅ USA LA MODALITÀ DEL CANTIERE
+                  const modalita = cant?.modalita_calcolo_sal || 'solo_lavori';
+                  const tot = modalita === 'contratto_completo'
+                    ? parseFloat(cant?.importo_contratto || 0)
+                    : parseFloat(cant?.importo_lavori || 0);
                   
                   // Calcola la somma di tutti i SAL precedenti dello stesso cantiere
                   const importoPrecedente = sal

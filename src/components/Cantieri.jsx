@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
 import { formatDate } from '../utils/dateUtils';
+import { exportCantieriPDF } from '../utils/exports/exportCantieriPDF';
 
 function Cantieri() {
   // ✅ USA IL CONTEXT
@@ -11,6 +12,13 @@ function Cantieri() {
   const [formData, setFormData] = useState({});
   const [ricerca, setRicerca] = useState('');
   const [saving, setSaving] = useState(false);
+
+   // ✅ CALCOLO AUTOMATICO IMPORTO LAVORI
+  const importoLavoriCalcolato = () => {
+    const contratto = parseFloat(formData.importoContratto || formData.importo_contratto || 0);
+    const oneri = parseFloat(formData.oneriSicurezza || formData.oneri_sicurezza || 0);
+    return contratto - oneri;
+  };
 
   // ✅ MOSTRA LOADING
   if (loading.cantieri) {
@@ -50,9 +58,14 @@ const handleSave = async () => {
     data_inizio: formData.data_inizio || formData.dataInizio || null,
     data_fine: formData.data_fine || formData.dataFine || null,
     data_fine_prevista: formData.data_fine_prevista || formData.dataFinePrevista || null,
-    importo_contratto: formData.importo_contratto || formData.importoContratto || null,
-    importo_lavori: formData.importo_lavori || formData.importoLavori || null,
+    importo_contratto: formData.importo_contratto || formData.importoContratto ? parseFloat(formData.importo_contratto || formData.importoContratto) : null,
+    oneri_sicurezza: formData.oneri_sicurezza || formData.oneriSicurezza ? parseFloat(formData.oneri_sicurezza || formData.oneriSicurezza) : 0,
+    importo_lavori: importoLavoriCalcolato(), // ← CALCOLO AUTOMATICO
     codice_commessa: formData.codice_commessa || formData.codiceCommessa || null,
+    tipologia_lavoro: formData.tipologia_lavoro || formData.tipologiaLavoro || null,
+    oneri_sicurezza: formData.oneri_sicurezza || formData.oneriSicurezza ? parseFloat(formData.oneri_sicurezza || formData.oneriSicurezza) : 0,
+    ribasso_asta: formData.ribasso_asta || formData.ribassoAsta ? parseFloat(formData.ribasso_asta || formData.ribassoAsta) : 0,
+    modalita_calcolo_sal: formData.modalita_calcolo_sal || formData.modalitaCalcoloSal || 'solo_lavori',
     
     // RUP
     rup_nome: formData.rup_nome || formData.rupNome || null,
@@ -157,6 +170,14 @@ collaudatore_pec: formData.collaudatore_pec || formData.collaudatorePec || null,
     importoLavori: cantiere.importo_lavori,
     codice_commessa: cantiere.codice_commessa,
     codiceCommessa: cantiere.codice_commessa,
+    tipologia_lavoro: cantiere.tipologia_lavoro,
+    tipologiaLavoro: cantiere.tipologia_lavoro,
+    oneri_sicurezza: cantiere.oneri_sicurezza,
+    oneriSicurezza: cantiere.oneri_sicurezza,
+    ribasso_asta: cantiere.ribasso_asta,
+    ribassoAsta: cantiere.ribasso_asta,
+    modalita_calcolo_sal: cantiere.modalita_calcolo_sal,
+    modalitaCalcoloSal: cantiere.modalita_calcolo_sal,
     
     // RUP
     rup_nome: cantiere.rup_nome,
@@ -254,7 +275,12 @@ const statoLabels = {
       c.dl_nome?.toLowerCase().includes(searchLower)
     );
   }, [cantieri, ricerca]);
-
+// ✅ ESPORTA PDF
+  const esportaPDF = () => {
+    exportCantieriPDF({
+      cantieri: cantieriFiltrati
+    });
+  };
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center gap-4">
@@ -270,16 +296,24 @@ const statoLabels = {
           />
         </div>
 
-        <button
-          onClick={() => {
-  setShowForm(true);
-  setEditingId(null);
-  setFormData({ stato: 'pianificato' });
-}}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 whitespace-nowrap"
-        >
-          ➕ Nuovo Cantiere
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setShowForm(true);
+              setEditingId(null);
+              setFormData({ stato: 'pianificato' });
+            }}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 whitespace-nowrap"
+          >
+            ➕ Nuovo Cantiere
+          </button>
+          <button
+            onClick={esportaPDF}
+            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 whitespace-nowrap"
+          >
+            📄 Esporta PDF
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -382,24 +416,93 @@ const statoLabels = {
               onChange={(e) => setFormData({...formData, dataFinePrevista: e.target.value, data_fine_prevista: e.target.value})}
               disabled={saving}
             />
+               {/* ========== SEZIONE ECONOMICA ========== */}
+            
+            {/* 1. IMPORTO CONTRATTO */}
             <input 
               type="number" 
               step="0.01"
-              placeholder="Importo Lavori €" 
+              placeholder="Importo Contratto € *" 
               className="border rounded px-3 py-2"
-              value={formData.importoLavori || formData.importo_lavori || ''} 
-              onChange={(e) => setFormData({...formData, importoLavori: e.target.value, importo_lavori: e.target.value})}
+              value={formData.importoContratto || formData.importo_contratto || ''} 
+              onChange={(e) => setFormData({...formData, importoContratto: e.target.value, importo_contratto: e.target.value})}
               disabled={saving}
             />
+
+            {/* 2. ONERI SICUREZZA */}
             <input 
-  type="number" 
-  step="0.01"
-  placeholder="Importo Contratto €" 
-  className="border rounded px-3 py-2"
-  value={formData.importoContratto || formData.importo_contratto || ''} 
-  onChange={(e) => setFormData({...formData, importoContratto: e.target.value, importo_contratto: e.target.value})}
-  disabled={saving}
-/>
+              type="number" 
+              step="0.01"
+              placeholder="Oneri Sicurezza €" 
+              className="border rounded px-3 py-2"
+              value={formData.oneriSicurezza || formData.oneri_sicurezza || ''} 
+              onChange={(e) => setFormData({...formData, oneriSicurezza: e.target.value, oneri_sicurezza: e.target.value})}
+              disabled={saving}
+            />
+
+            {/* 3. IMPORTO LAVORI - CALCOLATO AUTOMATICAMENTE */}
+            <div className="col-span-2 bg-blue-50 p-3 rounded border border-blue-200">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-gray-700">💶 Importo Lavori (Calcolato):</span>
+                <span className="text-lg font-bold text-blue-600">
+                  € {importoLavoriCalcolato().toFixed(2)}
+                </span>
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                Formula: Importo Contratto - Oneri Sicurezza
+              </div>
+            </div>
+
+            {/* 4. TIPOLOGIA LAVORO */}
+            <select 
+              className="border rounded px-3 py-2" 
+              value={formData.tipologiaLavoro || formData.tipologia_lavoro || ''}
+              onChange={(e) => setFormData({...formData, tipologiaLavoro: e.target.value, tipologia_lavoro: e.target.value})}
+              disabled={saving}
+            >
+              <option value="">Tipologia Lavoro</option>
+              <option value="a_corpo">📦 A Corpo</option>
+              <option value="a_misura">📏 A Misura</option>
+            </select>
+
+            {/* 5. RIBASSO D'ASTA */}
+            <input 
+              type="number" 
+              step="0.01"
+              min="0"
+              max="100"
+              placeholder="Ribasso d'Asta %" 
+              className="border rounded px-3 py-2"
+              value={formData.ribassoAsta || formData.ribasso_asta || ''} 
+              onChange={(e) => {
+                const val = parseFloat(e.target.value);
+                if (!isNaN(val) && val >= 0 && val <= 100) {
+                  setFormData({...formData, ribassoAsta: e.target.value, ribasso_asta: e.target.value});
+                } else if (e.target.value === '') {
+                  setFormData({...formData, ribassoAsta: '', ribasso_asta: ''});
+                }
+              }}
+              disabled={saving}
+            />
+            
+            {/* ========== FINE SEZIONE ECONOMICA ========== */}
+            {/* ========== MODALITÀ CALCOLO SAL ========== */}
+            <div className="col-span-2">
+              <label className="block text-sm font-medium mb-2">📊 Modalità Calcolo SAL</label>
+              <select 
+                className="border rounded px-3 py-2 w-full" 
+                value={formData.modalitaCalcoloSal || formData.modalita_calcolo_sal || 'solo_lavori'}
+                onChange={(e) => setFormData({...formData, modalitaCalcoloSal: e.target.value, modalita_calcolo_sal: e.target.value})}
+                disabled={saving}
+              >
+                <option value="solo_lavori">💶 Solo Lavori (esclusi oneri sicurezza)</option>
+                <option value="contratto_completo">📄 Contratto Completo (lavori + oneri)</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Scegli come calcolare i SAL in base alle richieste del Direttore Lavori
+              </p>
+            </div>
+            {/* ========== FINE MODALITÀ CALCOLO SAL ========== */}
           </div>
 
           <h4 className="font-semibold text-gray-700 mb-2 mt-4">RUP - Responsabile Unico Procedimento</h4>
@@ -681,8 +784,28 @@ const statoLabels = {
   <span className="text-gray-600 font-medium">Cassa:</span> {cant.casse_edile || '-'}
 </div>
                   <div>
-                    <span className="text-gray-600 font-medium">Importo:</span> € {cant.importo_lavori || '-'}
+                    <span className="text-gray-600 font-medium">Contratto:</span> {cant.importo_contratto ? `€ ${parseFloat(cant.importo_contratto).toFixed(2)}` : '-'}
                   </div>
+                  <div>
+                    <span className="text-gray-600 font-medium">Lavori:</span> {cant.importo_lavori ? `€ ${parseFloat(cant.importo_lavori).toFixed(2)}` : '-'}
+                  </div>
+                  {cant.tipologia_lavoro && (
+                    <div>
+                      <span className="text-gray-600 font-medium">Tipologia:</span>{' '}
+                      {cant.tipologia_lavoro === 'a_corpo' ? '📦 A Corpo' : '📏 A Misura'}
+                    </div>
+                  )}
+                  {cant.oneri_sicurezza > 0 && (
+                    <div>
+                      <span className="text-gray-600 font-medium">Oneri Sic.:</span> € {parseFloat(cant.oneri_sicurezza).toFixed(2)}
+                    </div>
+                  )}
+                  {cant.ribasso_asta > 0 && (
+                    <div>
+                      <span className="text-gray-600 font-medium">Ribasso:</span> {parseFloat(cant.ribasso_asta).toFixed(2)}%
+                    </div>
+                  )}
+
                   <div>
                     <span className="text-gray-600 font-medium">Inizio:</span> {formatDate(cant.data_inizio)}
                   </div>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useData } from '../contexts/DataContext';
-
+import { exportEconomicoCantiererPDF } from '../utils/exports/exportEconomicoCantiererPDF';
 function EconomicoCantiere() {
   const {
     cantieri = [],
@@ -18,19 +18,20 @@ function EconomicoCantiere() {
     if (!cantiereSelezionato) return null;
 
     // ========== RICAVI - Fatture Emesse ==========
-    const fatture = fattureEmesse.filter(f => f.cantiere_id === cantiereSelezionato);
-    
-    const totaleRicavi = fatture.reduce((sum, f) => {
-      const imponibile = parseFloat(f.imponibile || 0);
-      const iva = parseFloat(f.percentuale_iva || 22);
-      const totale = imponibile * (1 + iva / 100);
-      return sum + totale;
-    }, 0);
+  
+const fatture = fattureEmesse.filter(f => f.cantiere_id === cantiereSelezionato);
 
-    const totaleIncassato = fatture.reduce((sum, f) => {
-      const incassato = (f.acconti || []).reduce((s, a) => s + parseFloat(a.importo || 0), 0);
-      return sum + incassato;
-    }, 0);
+const totaleRicavi = fatture.reduce((sum, f) => {
+  const imponibile = parseFloat(f.imponibile || 0);
+  const iva = parseFloat(f.percentuale_iva || 22);
+  const totale = imponibile * (1 + iva / 100);
+  return sum + totale;
+}, 0);
+
+const totaleIncassato = fatture.reduce((sum, f) => {
+  const incassato = (f.acconti || []).reduce((s, a) => s + parseFloat(a.importo || 0), 0);
+  return sum + incassato;
+}, 0);
 
     const daIncassare = totaleRicavi - totaleIncassato;
 
@@ -85,6 +86,15 @@ function EconomicoCantiere() {
     };
   }, [cantiereSelezionato, fattureEmesse, movimentiContabili, storicoPaghe, cassaEdileLavoratori]);
 
+  // ✅ ESPORTA PDF
+  const esportaPDF = () => {
+    const cantiere = cantieri.find(c => c.id === cantiereSelezionato);
+    exportEconomicoCantiererPDF({
+      cantiere,
+      economico
+    });
+  };
+
   if (loading.cantieri) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -114,6 +124,17 @@ function EconomicoCantiere() {
             ))}
           </select>
         </div>
+
+        {cantiereSelezionato && economico && (
+          <div className="mb-6">
+            <button 
+              onClick={esportaPDF}
+              className="w-full bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+            >
+              📄 Esporta Report PDF
+            </button>
+          </div>
+        )}
 
         {economico && (
           <>

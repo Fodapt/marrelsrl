@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
+import { exportScadenzarioPDF } from '../utils/exports/exportScadenzarioPDF';
 
 function Scadenzario() {
   // ✅ USA IL CONTEXT
@@ -12,11 +13,12 @@ function Scadenzario() {
     documenti = [],
     rateizzi = [],
     rate = [],
+    manutenzioniVeicoli = [],
     loading
   } = useData();
 
   // ✅ MOSTRA LOADING
-  if (loading.lavoratori || loading.unilav || loading.certificazioni || loading.veicoli || loading.cantieri) {
+  if (loading.lavoratori || loading.unilav || loading.certificazioni || loading.veicoli || loading.cantieri || loading.manutenzioniVeicoli) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
@@ -79,6 +81,43 @@ function Scadenzario() {
           }
         }
       });
+    });
+
+    // MANUTENZIONI VEICOLI PROGRAMMATE
+    manutenzioniVeicoli.forEach(manutenzione => {
+      // Solo manutenzioni completate con data programmata
+      if (manutenzione.completato && manutenzione.prossima_data) {
+        const veicolo = veicoli.find(v => v.id === manutenzione.veicolo_id);
+        if (!veicolo) return;
+        
+        const scadenza = new Date(manutenzione.prossima_data);
+        const giorniMancanti = Math.ceil((scadenza - oggi) / (1000 * 60 * 60 * 24));
+        
+        // Mostra manutenzioni fino a 60 giorni futuri e 30 giorni passati
+        if (giorniMancanti <= 60 && giorniMancanti >= -30) {
+          // Converti tipo intervento in etichetta leggibile
+          const tipiIntervento = {
+            'tagliando': 'Tagliando',
+            'cambio_olio': 'Cambio Olio',
+            'cambio_gomme': 'Cambio Gomme',
+            'filtri': 'Cambio Filtri',
+            'freni': 'Freni',
+            'frizione': 'Frizione',
+            'batteria': 'Batteria',
+            'revisione_interna': 'Revisione',
+            'altro': 'Manutenzione'
+          };
+          const tipoLabel = tipiIntervento[manutenzione.tipo_intervento] || 'Manutenzione';
+          
+          scadenze.push({
+            tipo: 'manutenzione_veicolo',
+            descrizione: `${tipoLabel} ${veicolo.targa}`,
+            lavoratore: `${veicolo.marca} ${veicolo.modello}${manutenzione.prossimi_km ? ` - ${manutenzione.prossimi_km.toLocaleString('it-IT')} km` : ''}`,
+            scadenza: manutenzione.prossima_data,
+            giorniMancanti
+          });
+        }
+      }
     });
 
     // DNLT CANTIERI
@@ -177,13 +216,30 @@ rateizzi.forEach(rateizzo => {
 });
 
     return scadenze.sort((a, b) => a.giorniMancanti - b.giorniMancanti);
-  }, [certificazioni, veicoli, cantieri, unilav, lavoratori, documenti, rateizzi, rate]);
+  }, [certificazioni, veicoli, cantieri, unilav, lavoratori, documenti, rateizzi, rate, manutenzioniVeicoli]);
 
   const scadenzeImminenti = tutteScadenze.filter(s => s.giorniMancanti >= 0);
   const scadenzePassate = tutteScadenze.filter(s => s.giorniMancanti < 0);
 
+  // ✅ ESPORTA PDF
+  const esportaPDF = () => {
+    exportScadenzarioPDF({
+      scadenzeImminenti,
+      scadenzePassate
+    });
+  };
   return (
     <div className="space-y-4">
+      {/* Pulsante Export */}
+      <div className="flex justify-end">
+        <button 
+          onClick={esportaPDF}
+          className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+        >
+          📄 Esporta PDF
+        </button>
+      </div>
+
       {/* Scadenze Imminenti */}
       <div className="bg-white p-6 rounded-lg shadow">
         <h3 className="text-xl font-semibold mb-4">📅 Scadenze Imminenti (prossimi 30 giorni)</h3>
@@ -202,7 +258,10 @@ rateizzi.forEach(rateizzo => {
               }`}>
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
-                    <div className="font-semibold mb-1">{scad.descrizione}</div>
+                    <div className="font-semibold mb-1">
+                      {scad.tipo === 'manutenzione_veicolo' && '🔧 '}
+                      {scad.descrizione}
+                    </div>
                     <p className="text-sm text-gray-600">{scad.lavoratore}</p>
                     <p className="text-xs text-gray-500 mt-1">Scadenza: {formatDate(scad.scadenza)}</p>
                   </div>
@@ -230,7 +289,10 @@ rateizzi.forEach(rateizzo => {
               <div key={idx} className="p-4 rounded-lg border-l-4 bg-red-100 border-red-700">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
-                    <div className="font-semibold mb-1 text-red-800">{scad.descrizione}</div>
+                    <div className="font-semibold mb-1 text-red-800">
+                      {scad.tipo === 'manutenzione_veicolo' && '🔧 '}
+                      {scad.descrizione}
+                    </div>
                     <p className="text-sm text-red-700">{scad.lavoratore}</p>
                     <p className="text-xs text-red-600 mt-1">Scadenza: {formatDate(scad.scadenza)}</p>
                   </div>

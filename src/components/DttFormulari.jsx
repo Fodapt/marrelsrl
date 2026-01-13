@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
+import { exportDTTFormulariPDF } from '../utils/exports/exportDTTFormulariPDF';
 
 function DttFormulari() {
   const {
@@ -207,25 +208,39 @@ function DttFormulari() {
       alert('❌ Errore: ' + result.error);
     }
   };
-
+  // ✅ ESPORTA PDF
+  const esportaPDF = () => {
+    exportDTTFormulariPDF({
+      dttFormulari: fattureFiltrate,
+      fornitori,
+      cantieri
+    });
+  };
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">DTT / Formulari</h2>
-        <button 
-          onClick={() => {
-            setShowForm(true);
-            setEditingId(null);
-            setFormData({ documenti: [] });
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }} 
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          ➕ Nuova Fattura
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => {
+              setShowForm(true);
+              setEditingId(null);
+              setFormData({ documenti: [] });
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }} 
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            ➕ Nuova Fattura
+          </button>
+          <button 
+            onClick={esportaPDF}
+            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+          >
+            📄 Esporta PDF
+          </button>
+        </div>
       </div>
-
       {/* Filtri */}
       <div className="bg-white p-4 rounded-lg shadow">
         <h3 className="font-semibold mb-3">🔍 Filtri</h3>

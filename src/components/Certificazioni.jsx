@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useData } from '../contexts/DataContext';
+import { exportCertificazioniPDF } from '../utils/exports/exportCertificazioniPDF';
 
 function Certificazioni() {
   const { 
@@ -125,7 +126,12 @@ function Certificazioni() {
       alert('❌ Errore: ' + result.error);
     }
   };
-
+// ✅ ESPORTA PDF
+  const esportaPDF = () => {
+    exportCertificazioniPDF({
+      documenti
+    });
+  };
   if (loading.documenti) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -139,17 +145,25 @@ function Certificazioni() {
 
   return (
     <div className="space-y-4">
-      <button 
-        onClick={() => {
-          setShowForm(true);
-          setEditingId(null);
-          setFormData({});
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }} 
-        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-      >
-        ➕ Nuova Certificazione
-      </button>
+      <div className="flex gap-2">
+        <button 
+          onClick={() => {
+            setShowForm(true);
+            setEditingId(null);
+            setFormData({});
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }} 
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
+          ➕ Nuova Certificazione
+        </button>
+        <button 
+          onClick={esportaPDF}
+          className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+        >
+          📄 Esporta PDF
+        </button>
+      </div>
 
       {showForm && (
         <div className="bg-white p-6 rounded-lg shadow border-2 border-blue-200">

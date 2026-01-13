@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
+import { exportCassaEdilePDF } from '../utils/exports/exportCassaEdilePDF';
 
 function CassaEdile() {
   const { 
@@ -317,72 +318,11 @@ function CassaEdile() {
   }, [cantieri, cassaEdileLavoratori, meseReport, annoReport, vociCassa]);
 
   const esportaPDFReport = () => {
-    const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Report Casse Edili - ${mesiNomi[meseReport - 1]} ${annoReport}</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    h1 { color: #1e40af; border-bottom: 3px solid #1e40af; padding-bottom: 10px; }
-    h2 { color: #3b82f6; margin-top: 30px; }
-    .info { background: #eff6ff; padding: 15px; border-radius: 5px; margin: 20px 0; }
-    table { border-collapse: collapse; width: 100%; margin: 20px 0; }
-    th, td { border: 1px solid #333; padding: 12px; text-align: left; }
-    th { background-color: #3b82f6; color: white; font-weight: bold; }
-    tr:nth-child(even) { background-color: #f3f4f6; }
-    .total { font-weight: bold; text-align: right; }
-    .footer { margin-top: 40px; text-align: center; color: #666; font-size: 12px; border-top: 1px solid #ccc; padding-top: 20px; }
-    @media print { .no-print { display: none; } body { margin: 0; } }
-  </style>
-</head>
-<body>
-  <button class="no-print" onclick="window.print()" style="background: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px;">
-    🖨️ Stampa / Salva PDF
-  </button>
-  <h1>📊 Report Casse Edili</h1>
-  <div class="info">
-    <strong>Azienda:</strong> Marrel S.r.l.<br>
-    <strong>Periodo:</strong> ${mesiNomi[meseReport - 1]} ${annoReport}<br>
-    <strong>Data generazione:</strong> ${new Date().toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-  </div>
-  ${Object.entries(reportData).map(([cassa, cantieriObj]) => {
-    const totaleGenerale = Object.values(cantieriObj).reduce((sum, val) => sum + val, 0);
-    return `
-    <h2>Cassa Edile: ${cassa}</h2>
-    <table>
-      <thead>
-        <tr>
-          <th style="width: 70%">Cantiere</th>
-          <th style="width: 30%; text-align: right">Totale Contributi (€)</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${Object.entries(cantieriObj).map(([cantiere, totale]) => `
-        <tr>
-          <td>${cantiere}</td>
-          <td class="total">${totale.toFixed(2)}</td>
-        </tr>
-        `).join('')}
-        <tr style="background-color: #dbeafe; font-weight: bold;">
-          <td>TOTALE ${cassa}</td>
-          <td class="total">${totaleGenerale.toFixed(2)}</td>
-        </tr>
-      </tbody>
-    </table>
-    `;
-  }).join('')}
-  <div class="footer">
-    <p>Gestionale Marrel S.r.l. - Report Casse Edili</p>
-    <p>Documento generato automaticamente dal sistema</p>
-  </div>
-</body>
-</html>`;
-
-    const newWindow = window.open('', '_blank');
-    newWindow.document.write(htmlContent);
-    newWindow.document.close();
+    exportCassaEdilePDF({
+      reportData,
+      mese: mesiNomi[meseReport - 1],
+      anno: annoReport
+    });
   };
 
   const subTabs = ["Cifre Lavoratore", "Totali Casse", "Controllo", "Report"];

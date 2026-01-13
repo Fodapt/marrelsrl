@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
 import { validateIBAN } from '../utils/validators';
+import { exportFornitoriPDF } from '../utils/exports/exportFornitoriPDF';
 
 function Fornitori() {
   // ✅ USA IL CONTEXT
@@ -117,7 +118,12 @@ function Fornitori() {
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
-
+// ✅ ESPORTA PDF
+  const esportaPDF = () => {
+    exportFornitoriPDF({
+      fornitori: filtered
+    });
+  };
   // ✅ FILTRO CON USEMEMO
   const filtered = useMemo(() => {
     if (!searchTerm) return fornitori;
@@ -133,24 +139,32 @@ function Fornitori() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-4">
         <input
           type="text"
           placeholder="🔍 Cerca per ragione sociale, P.IVA, CF o email..."
-          className="border rounded px-3 py-2 w-96"
+          className="border rounded px-3 py-2 flex-1 max-w-md"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
-        <button
-          onClick={() => {
-            setShowForm(true);
-            setEditingId(null);
-            setFormData({});
-          }}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          ➕ Nuovo Fornitore
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setShowForm(true);
+              setEditingId(null);
+              setFormData({});
+            }}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 whitespace-nowrap"
+          >
+            ➕ Nuovo Fornitore
+          </button>
+          <button
+            onClick={esportaPDF}
+            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 whitespace-nowrap"
+          >
+            📄 Esporta PDF
+          </button>
+        </div>
       </div>
 
       {showForm && (

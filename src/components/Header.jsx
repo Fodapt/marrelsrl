@@ -1,4 +1,5 @@
 import { useAuth } from '../contexts/AuthContext';
+import { APP_CONFIG } from '../config/appConfig';
 
 function Header({ sidebarOpen, setSidebarOpen }) {
   const { profile, signOut } = useAuth();
@@ -26,7 +27,7 @@ function Header({ sidebarOpen, setSidebarOpen }) {
             </button>
             
             <div>
-              <h1 className="text-xl md:text-2xl font-bold">🏗️ Gestionale Marrel S.r.l.</h1>
+              <h1 className="font-bold" style={{ fontSize: '24px' }}>{APP_CONFIG.appFullName}</h1>
             </div>
           </div>
           

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
+import { exportAccontiPDF } from '../utils/exports/exportAccontiPDF';
 
 function Acconti() {
   const {
@@ -225,23 +226,42 @@ function Acconti() {
     }
   };
 
+  // ✅ ESPORTA PDF
+  const esportaPDF = () => {
+    exportAccontiPDF({
+      acconti: accontiFiltrati,
+      lavoratori,
+      mesiNomi,
+      calcolaStatoAcconto,
+      calcolaRiepilogo
+    });
+  };
+
   return (
     <div className="space-y-4">
-      <button 
-        onClick={() => {
-          setShowForm(true);
-          setEditingId(null);
-          setFormData({ 
-            tipo: 'paga', 
-            meseRiferimento: new Date().getMonth() + 1, 
-            annoRiferimento: new Date().getFullYear() 
-          });
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }} 
-        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-      >
-        ➕ Nuovo Acconto
-      </button>
+      <div className="flex gap-2">
+        <button 
+          onClick={() => {
+            setShowForm(true);
+            setEditingId(null);
+            setFormData({ 
+              tipo: 'paga', 
+              meseRiferimento: new Date().getMonth() + 1, 
+              annoRiferimento: new Date().getFullYear() 
+            });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }} 
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        >
+          ➕ Nuovo Acconto
+        </button>
+        <button 
+          onClick={esportaPDF}
+          className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+        >
+          📄 Esporta PDF
+        </button>
+      </div>
 
       {/* Filtri */}
       <div className="bg-white p-4 rounded-lg shadow">
@@ -288,50 +308,57 @@ function Acconti() {
       </div>
 
       {/* Riepilogo Totali */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-          <div className="text-sm text-blue-700 mb-1">Totale Acconti</div>
-          <div className="text-2xl font-bold text-blue-900">
-            € {riepilogoFiltrato.totaleAcconti.toFixed(2)}
+      <div className="bg-white p-4 rounded-lg shadow">
+        <h3 className="font-semibold mb-3 text-lg">📊 Riepilogo Generale</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+            <div className="text-sm text-blue-700 mb-1">Totale Acconti</div>
+            <div className="text-2xl font-bold text-blue-900">
+              € {riepilogoFiltrato.totaleAcconti.toFixed(2)}
+            </div>
+            <div className="text-xs text-blue-600 mt-1">
+              {accontiFiltrati.length} acconti
+            </div>
           </div>
-          <div className="text-xs text-blue-600 mt-1">
-            {accontiFiltrati.length} acconti
+          
+          <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+            <div className="text-sm text-purple-700 mb-1">Totale TFR</div>
+            <div className="text-2xl font-bold text-purple-900">
+              € {riepilogoFiltrato.totaleTFR.toFixed(2)}
+            </div>
+            <div className="text-xs text-purple-600 mt-1">
+              {accontiFiltrati.filter(a => a.tipo === 'tfr').length} TFR
+            </div>
           </div>
-        </div>
-        <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-          <div className="text-sm text-purple-700 mb-1">Totale TFR</div>
-          <div className="text-2xl font-bold text-purple-900">
-            € {riepilogoFiltrato.totaleTFR.toFixed(2)}
+          
+          <div className="bg-cyan-50 p-4 rounded-lg border border-cyan-200">
+            <div className="text-sm text-cyan-700 mb-1">Totale Acconto Paghe</div>
+            <div className="text-2xl font-bold text-cyan-900">
+              € {riepilogoFiltrato.totaleAccontiPaga.toFixed(2)}
+            </div>
+            <div className="text-xs text-cyan-600 mt-1">
+              {accontiFiltrati.filter(a => a.tipo !== 'tfr').length} acconti paga
+            </div>
           </div>
-          <div className="text-xs text-purple-600 mt-1">
-            {accontiFiltrati.filter(a => a.tipo === 'tfr').length} TFR
+          
+          <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+            <div className="text-sm text-green-700 mb-1">Totale Recuperato</div>
+            <div className="text-2xl font-bold text-green-900">
+              € {riepilogoFiltrato.totaleRecuperato.toFixed(2)}
+            </div>
+            <div className="text-xs text-green-600 mt-1">
+              {accontiFiltrati.filter(a => calcolaStatoAcconto(a).stato === 'saldato').length} saldati
+            </div>
           </div>
-        </div>
-        <div className="bg-cyan-50 p-4 rounded-lg border border-cyan-200">
-          <div className="text-sm text-cyan-700 mb-1">Totale Acconto Paghe</div>
-          <div className="text-2xl font-bold text-cyan-900">
-            € {riepilogoFiltrato.totaleAccontiPaga.toFixed(2)}
-          </div>
-          <div className="text-xs text-cyan-600 mt-1">
-            {accontiFiltrati.filter(a => a.tipo !== 'tfr').length} acconti paga
-          </div>
-        </div>
-        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-          <div className="text-sm text-green-700 mb-1">Totale Recuperato</div>
-          <div className="text-2xl font-bold text-green-900">
-            € {riepilogoFiltrato.totaleRecuperato.toFixed(2)}
-          </div>
-          <div className="text-xs text-green-600 mt-1">
-            {accontiFiltrati.filter(a => calcolaStatoAcconto(a).stato === 'saldato').length} saldati
-          </div>
-        </div>
-        <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-          <div className="text-sm text-orange-700 mb-1">Residuo da Recuperare</div>
-          <div className="text-2xl font-bold text-orange-900">
-            € {riepilogoFiltrato.residuo.toFixed(2)}
-          </div>
-          <div className="text-xs text-orange-600 mt-1">
-            {accontiFiltrati.filter(a => calcolaStatoAcconto(a).stato === 'da_recuperare').length} da recuperare
+          
+          <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+            <div className="text-sm text-orange-700 mb-1">Residuo da Recuperare</div>
+            <div className="text-2xl font-bold text-orange-900">
+              € {riepilogoFiltrato.residuo.toFixed(2)}
+            </div>
+            <div className="text-xs text-orange-600 mt-1">
+              {accontiFiltrati.filter(a => calcolaStatoAcconto(a).stato === 'da_recuperare').length} da recuperare
+            </div>
           </div>
         </div>
       </div>
@@ -457,7 +484,7 @@ function Acconti() {
       )}
 
       {/* Lista Acconti */}
-      <div className="space-y-4">
+      <div className="space-y-6">
         {accontiFiltrati.length === 0 && !filtroLavoratore && !filtroStato ? (
           <div className="bg-gray-50 p-8 rounded-lg text-center">
             <p className="text-4xl mb-4">💰</p>
@@ -479,172 +506,195 @@ function Acconti() {
             </button>
           </div>
         ) : (
-          accontiFiltrati.map(acconto => {
-            const lavoratore = lavoratori.find(l => l.id === acconto.lavoratore_id);
-            const stato = calcolaStatoAcconto(acconto);
-            const riepilogo = calcolaRiepilogo(acconto);
-            const isEspanso = accontoEspanso[acconto.id];
+          Object.entries(
+            accontiFiltrati.reduce((acc, acconto) => {
+              if (!acc[acconto.lavoratore_id]) {
+                acc[acconto.lavoratore_id] = [];
+              }
+              acc[acconto.lavoratore_id].push(acconto);
+              return acc;
+            }, {})
+          ).map(([lavoratoreId, accontiLavoratore]) => {
+            const lavoratore = lavoratori.find(l => l.id === lavoratoreId);
+            
+            const totaleAccontiLav = accontiLavoratore.reduce((sum, a) => sum + parseFloat(a.importo || 0), 0);
+            const totaleTFRLav = accontiLavoratore.filter(a => a.tipo === 'tfr').reduce((sum, a) => sum + parseFloat(a.importo || 0), 0);
+            const totaleAccontiPagaLav = accontiLavoratore.filter(a => a.tipo !== 'tfr').reduce((sum, a) => sum + parseFloat(a.importo || 0), 0);
+            const totaleRecuperatoLav = accontiLavoratore
+              .filter(a => a.tipo !== 'tfr')
+              .reduce((sum, a) => {
+                const detratto = (a.detrazioni || []).reduce((s, d) => s + parseFloat(d.importo || 0), 0);
+                return sum + detratto;
+              }, 0);
+            const residuoLav = totaleAccontiPagaLav - totaleRecuperatoLav;
 
             return (
-              <div key={acconto.id} className="bg-white rounded-lg shadow p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-3">
-                    {acconto.tipo === 'paga' && (
-                      <button 
-                        onClick={() => setAccontoEspanso({
-                          ...accontoEspanso, 
-                          [acconto.id]: !isEspanso
-                        })}
-                        className="text-2xl text-blue-600 hover:text-blue-700 transition-transform"
-                        style={{ transform: isEspanso ? 'rotate(90deg)' : 'rotate(0deg)' }}
-                      >
-                        ▶
-                      </button>
-                    )}
-                    <div>
-                      <h3 className="text-xl font-bold text-blue-600">
-                        {lavoratore ? `${lavoratore.nome} ${lavoratore.cognome}` : '⚠️ Lavoratore non trovato'}
-                      </h3>
-                      <p className="text-sm text-gray-600">
-                        {acconto.tipo === 'tfr' ? '💼 Acconto TFR' : '💰 Acconto Paga'} - 
-                        {' '}{mesiNomi[(acconto.mese_riferimento || 1) - 1]} {acconto.anno_riferimento}
-                      </p>
+              <div key={lavoratoreId} className="bg-white rounded-lg shadow-lg p-6 border-2 border-blue-200">
+                <div className="mb-4 pb-4 border-b-2 border-blue-200">
+                  <h2 className="text-2xl font-bold text-blue-700">
+                    👤 {lavoratore ? `${lavoratore.nome} ${lavoratore.cognome}` : '⚠️ Lavoratore non trovato'}
+                  </h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {accontiLavoratore.length} accont{accontiLavoratore.length === 1 ? 'o' : 'i'} registrat{accontiLavoratore.length === 1 ? 'o' : 'i'}
+                  </p>
+                </div>
+
+                <div className="mb-6">
+                  <h3 className="font-semibold mb-3 text-lg text-gray-700">📊 Riepilogo</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                      <div className="text-xs text-blue-700 mb-1">Totale Acconti</div>
+                      <div className="text-xl font-bold text-blue-900">€ {totaleAccontiLav.toFixed(2)}</div>
+                      <div className="text-xs text-blue-600 mt-1">{accontiLavoratore.length} acconti</div>
                     </div>
-                  </div>
-                  <div className="flex gap-2 items-center">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${stato.color}`}>
-                      {stato.label}
-                    </span>
-                    <button 
-                      onClick={() => handleEdit(acconto)} 
-                      className="text-blue-600 hover:text-blue-700 text-xl"
-                    >
-                      ✏️
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(acconto)} 
-                      className="text-red-600 hover:text-red-700 text-xl"
-                    >
-                      🗑️
-                    </button>
+                    <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
+                      <div className="text-xs text-purple-700 mb-1">Totale TFR</div>
+                      <div className="text-xl font-bold text-purple-900">€ {totaleTFRLav.toFixed(2)}</div>
+                      <div className="text-xs text-purple-600 mt-1">{accontiLavoratore.filter(a => a.tipo === 'tfr').length} TFR</div>
+                    </div>
+                    <div className="bg-cyan-50 p-3 rounded-lg border border-cyan-200">
+                      <div className="text-xs text-cyan-700 mb-1">Tot. Acc. Paghe</div>
+                      <div className="text-xl font-bold text-cyan-900">€ {totaleAccontiPagaLav.toFixed(2)}</div>
+                      <div className="text-xs text-cyan-600 mt-1">{accontiLavoratore.filter(a => a.tipo !== 'tfr').length} paghe</div>
+                    </div>
+                    <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                      <div className="text-xs text-green-700 mb-1">Recuperato</div>
+                      <div className="text-xl font-bold text-green-900">€ {totaleRecuperatoLav.toFixed(2)}</div>
+                      <div className="text-xs text-green-600 mt-1">{accontiLavoratore.filter(a => calcolaStatoAcconto(a).stato === 'saldato').length} saldati</div>
+                    </div>
+                    <div className="bg-orange-50 p-3 rounded-lg border border-orange-200">
+                      <div className="text-xs text-orange-700 mb-1">Residuo</div>
+                      <div className="text-xl font-bold text-orange-900">€ {residuoLav.toFixed(2)}</div>
+                      <div className="text-xs text-orange-600 mt-1">{accontiLavoratore.filter(a => calcolaStatoAcconto(a).stato === 'da_recuperare').length} da recup.</div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                    <div className="text-sm text-blue-700 mb-1">Importo Acconto</div>
-                    <div className="text-2xl font-bold text-blue-900">€ {riepilogo.totale.toFixed(2)}</div>
-                  </div>
-                  <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                    <div className="text-sm text-green-700 mb-1">Data Bonifico</div>
-                    <div className="text-lg font-bold text-green-900">{formatDate(acconto.data_bonifico)}</div>
-                  </div>
-                  {acconto.tipo === 'paga' && (
-                    <>
-                      <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-                        <div className="text-sm text-yellow-700 mb-1">Detratto</div>
-                        <div className="text-2xl font-bold text-yellow-900">€ {riepilogo.pagato.toFixed(2)}</div>
-                      </div>
-                      <div className={`p-4 rounded-lg border ${riepilogo.rimanente > 0 ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200'}`}>
-                        <div className={`text-sm mb-1 ${riepilogo.rimanente > 0 ? 'text-orange-700' : 'text-green-700'}`}>Rimanente</div>
-                        <div className={`text-2xl font-bold ${riepilogo.rimanente > 0 ? 'text-orange-900' : 'text-green-900'}`}>
-                          € {riepilogo.rimanente.toFixed(2)}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg text-gray-700 border-b pb-2">💰 Acconti</h3>
+                  {accontiLavoratore.map(acconto => {
+                    const stato = calcolaStatoAcconto(acconto);
+                    const riepilogo = calcolaRiepilogo(acconto);
+                    const isEspanso = accontoEspanso[acconto.id];
+
+                    return (
+                      <div key={acconto.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex items-center gap-3">
+                            {acconto.tipo === 'paga' && (
+                              <button 
+                                onClick={() => setAccontoEspanso({...accontoEspanso, [acconto.id]: !isEspanso})}
+                                className="text-xl text-blue-600 hover:text-blue-700 transition-transform"
+                                style={{ transform: isEspanso ? 'rotate(90deg)' : 'rotate(0deg)' }}
+                              >
+                                ▶
+                              </button>
+                            )}
+                            <div>
+                              <h4 className="text-lg font-bold text-gray-800">
+                                {acconto.tipo === 'tfr' ? '💼 Acconto TFR' : '💰 Acconto Paga'}
+                              </h4>
+                              <p className="text-sm text-gray-600">
+                                {mesiNomi[(acconto.mese_riferimento || 1) - 1]} {acconto.anno_riferimento}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 items-center">
+                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${stato.color}`}>{stato.label}</span>
+                            <button onClick={() => handleEdit(acconto)} className="text-blue-600 hover:text-blue-700 text-xl">✏️</button>
+                            <button onClick={() => handleDelete(acconto)} className="text-red-600 hover:text-red-700 text-xl">🗑️</button>
+                          </div>
                         </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                          <div className="bg-blue-100 p-3 rounded border border-blue-300">
+                            <div className="text-xs text-blue-700 mb-1">Importo Acconto</div>
+                            <div className="text-lg font-bold text-blue-900">€ {riepilogo.totale.toFixed(2)}</div>
+                          </div>
+                          <div className="bg-green-100 p-3 rounded border border-green-300">
+                            <div className="text-xs text-green-700 mb-1">Data Bonifico</div>
+                            <div className="text-sm font-bold text-green-900">{formatDate(acconto.data_bonifico)}</div>
+                          </div>
+                          {acconto.tipo === 'paga' && (
+                            <>
+                              <div className="bg-yellow-100 p-3 rounded border border-yellow-300">
+                                <div className="text-xs text-yellow-700 mb-1">Detratto</div>
+                                <div className="text-lg font-bold text-yellow-900">€ {riepilogo.pagato.toFixed(2)}</div>
+                              </div>
+                              <div className={`p-3 rounded border ${riepilogo.rimanente > 0 ? 'bg-orange-100 border-orange-300' : 'bg-green-100 border-green-300'}`}>
+                                <div className={`text-xs mb-1 ${riepilogo.rimanente > 0 ? 'text-orange-700' : 'text-green-700'}`}>Rimanente</div>
+                                <div className={`text-lg font-bold ${riepilogo.rimanente > 0 ? 'text-orange-900' : 'text-green-900'}`}>€ {riepilogo.rimanente.toFixed(2)}</div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {acconto.note && (
+                          <div className="bg-gray-100 p-2 rounded mb-3 border-l-4 border-gray-400">
+                            <p className="text-xs text-gray-700"><strong>📝 Note:</strong> {acconto.note}</p>
+                          </div>
+                        )}
+
+                        {acconto.tipo === 'paga' && isEspanso && (
+                          <div className="border-t pt-3 mt-3">
+                            <h4 className="font-semibold mb-3">📋 Recupero Acconto - Detrazioni mensili</h4>
+                            <div className="bg-blue-50 p-3 rounded mb-3 border border-blue-200">
+                              <h5 className="font-medium mb-2 text-blue-900 text-sm">➕ Aggiungi Detrazione</h5>
+                              <div className="grid grid-cols-4 gap-2">
+                                <select className="border rounded px-2 py-1 bg-white text-sm" value={meseDetrazione} onChange={(e) => setMeseDetrazione(Number(e.target.value))}>
+                                  {mesiNomi.map((nome, index) => <option key={index} value={index + 1}>{nome}</option>)}
+                                </select>
+                                <input type="number" className="border rounded px-2 py-1 text-sm" placeholder="Anno" value={annoDetrazione} onChange={(e) => setAnnoDetrazione(Number(e.target.value))} />
+                                <input type="number" step="0.01" placeholder="Importo €" className="border rounded px-2 py-1 text-sm" value={importoDetrazione} onChange={(e) => setImportoDetrazione(e.target.value)} />
+                                <button onClick={() => aggiungiDetrazione(acconto.id)} className="bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 text-sm">➕ Aggiungi</button>
+                              </div>
+                            </div>
+
+                            {(acconto.detrazioni || []).length > 0 ? (
+                              <div className="overflow-x-auto">
+                                <table className="w-full border text-sm">
+                                  <thead className="bg-gray-100">
+                                    <tr>
+                                      <th className="border px-3 py-2 text-left">Mese</th>
+                                      <th className="border px-3 py-2 text-left">Anno</th>
+                                      <th className="border px-3 py-2 text-right">Importo</th>
+                                      <th className="border px-3 py-2 text-center">Azioni</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {acconto.detrazioni.sort((a, b) => {
+                                      if (a.anno !== b.anno) return a.anno - b.anno;
+                                      return a.mese - b.mese;
+                                    }).map(detrazione => (
+                                      <tr key={detrazione.id} className="hover:bg-gray-50">
+                                        <td className="border px-3 py-2">{mesiNomi[detrazione.mese - 1]}</td>
+                                        <td className="border px-3 py-2">{detrazione.anno}</td>
+                                        <td className="border px-3 py-2 text-right font-mono">€ {parseFloat(detrazione.importo).toFixed(2)}</td>
+                                        <td className="border px-3 py-2 text-center">
+                                          <button onClick={() => eliminaDetrazione(acconto.id, detrazione.id)} className="text-red-600 hover:text-red-700 text-lg">🗑️</button>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                    <tr className="bg-blue-50 font-bold">
+                                      <td colSpan="2" className="border px-3 py-2 text-right text-sm">TOTALE DETRATTO:</td>
+                                      <td className="border px-3 py-2 text-right font-mono text-blue-900">€ {riepilogo.pagato.toFixed(2)}</td>
+                                      <td className="border px-3 py-2"></td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            ) : (
+                              <div className="bg-gray-100 p-6 rounded text-center border border-gray-200">
+                                <p className="text-gray-500 text-sm">Nessuna detrazione registrata</p>
+                                <p className="text-xs text-gray-400 mt-1">Usa il form sopra per aggiungere detrazioni mensili</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    </>
-                  )}
+                    );
+                  })}
                 </div>
-
-                {acconto.note && (
-                  <div className="bg-gray-50 p-3 rounded-lg mb-4 border-l-4 border-gray-400">
-                    <p className="text-sm text-gray-700"><strong>📝 Note:</strong> {acconto.note}</p>
-                  </div>
-                )}
-
-                {acconto.tipo === 'paga' && isEspanso && (
-                  <div className="border-t pt-4 mt-4">
-                    <h4 className="font-semibold mb-3 text-lg">📋 Recupero Acconto - Detrazioni mensili</h4>
-                    
-                    <div className="bg-blue-50 p-4 rounded-lg mb-4 border border-blue-200">
-                      <h5 className="font-medium mb-3 text-blue-900">➕ Aggiungi Detrazione</h5>
-                      <div className="grid grid-cols-4 gap-3">
-                        <select 
-                          className="border rounded px-3 py-2 bg-white"
-                          value={meseDetrazione}
-                          onChange={(e) => setMeseDetrazione(Number(e.target.value))}
-                        >
-                          {mesiNomi.map((nome, index) => <option key={index} value={index + 1}>{nome}</option>)}
-                        </select>
-                        <input 
-                          type="number" 
-                          className="border rounded px-3 py-2"
-                          placeholder="Anno"
-                          value={annoDetrazione}
-                          onChange={(e) => setAnnoDetrazione(Number(e.target.value))} 
-                        />
-                        <input 
-                          type="number" 
-                          step="0.01" 
-                          placeholder="Importo €" 
-                          className="border rounded px-3 py-2"
-                          value={importoDetrazione}
-                          onChange={(e) => setImportoDetrazione(e.target.value)} 
-                        />
-                        <button 
-                          onClick={() => aggiungiDetrazione(acconto.id)} 
-                          className="bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700"
-                        >
-                          ➕ Aggiungi
-                        </button>
-                      </div>
-                    </div>
-
-                    {(acconto.detrazioni || []).length > 0 ? (
-                      <div className="overflow-x-auto">
-                        <table className="w-full border">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="border px-4 py-2 text-left">Mese</th>
-                              <th className="border px-4 py-2 text-left">Anno</th>
-                              <th className="border px-4 py-2 text-right">Importo</th>
-                              <th className="border px-4 py-2 text-center">Azioni</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {acconto.detrazioni.sort((a, b) => {
-                              if (a.anno !== b.anno) return a.anno - b.anno;
-                              return a.mese - b.mese;
-                            }).map(detrazione => (
-                              <tr key={detrazione.id} className="hover:bg-gray-50">
-                                <td className="border px-4 py-2">{mesiNomi[detrazione.mese - 1]}</td>
-                                <td className="border px-4 py-2">{detrazione.anno}</td>
-                                <td className="border px-4 py-2 text-right font-mono">€ {parseFloat(detrazione.importo).toFixed(2)}</td>
-                                <td className="border px-4 py-2 text-center">
-                                  <button 
-                                    onClick={() => eliminaDetrazione(acconto.id, detrazione.id)} 
-                                    className="text-red-600 hover:text-red-700 text-xl"
-                                  >
-                                    🗑️
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                            <tr className="bg-blue-50 font-bold">
-                              <td colSpan="2" className="border px-4 py-2 text-right">TOTALE DETRATTO:</td>
-                              <td className="border px-4 py-2 text-right font-mono text-blue-900">€ {riepilogo.pagato.toFixed(2)}</td>
-                              <td className="border px-4 py-2"></td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div className="bg-gray-50 p-8 rounded-lg text-center border border-gray-200">
-                        <p className="text-gray-500">Nessuna detrazione registrata</p>
-                        <p className="text-sm text-gray-400 mt-1">Usa il form sopra per aggiungere detrazioni mensili</p>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             );
           })

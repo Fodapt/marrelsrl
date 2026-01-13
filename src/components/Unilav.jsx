@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useData } from '../contexts/DataContext';
+import { exportUnilavPDF } from '../utils/exports/exportUnilavPDF';
 
 function Unilav() {
   const {
@@ -207,7 +208,14 @@ const filteredUnilav = (() => {
     setFiltroLavoratore('');
     setSearchTerm('');
   };
-
+// ✅ ESPORTA PDF
+  const esportaPDF = () => {
+    exportUnilavPDF({
+      unilav: filteredUnilav,
+      lavoratori,
+      cantieri
+    });
+  };
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center gap-4 flex-wrap">
@@ -254,17 +262,25 @@ const filteredUnilav = (() => {
             </button>
           )}
         </div>
-        <button 
-          onClick={() => {
-            setShowForm(true);
-            setEditingId(null);
-            setFormData({});
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }} 
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          ➕ Nuovo Unilav
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => {
+              setShowForm(true);
+              setEditingId(null);
+              setFormData({});
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }} 
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 whitespace-nowrap"
+          >
+            ➕ Nuovo Unilav
+          </button>
+          <button 
+            onClick={esportaPDF}
+            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 whitespace-nowrap"
+          >
+            📄 Esporta PDF
+          </button>
+        </div>
       </div>
 
       {filteredUnilav.length > 0 && (filtroLavoratore || (dataInizioPeriodo && dataFinePeriodo)) && (
