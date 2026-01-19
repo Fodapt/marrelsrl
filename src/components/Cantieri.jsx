@@ -63,7 +63,6 @@ const handleSave = async () => {
     importo_lavori: importoLavoriCalcolato(), // ← CALCOLO AUTOMATICO
     codice_commessa: formData.codice_commessa || formData.codiceCommessa || null,
     tipologia_lavoro: formData.tipologia_lavoro || formData.tipologiaLavoro || null,
-    oneri_sicurezza: formData.oneri_sicurezza || formData.oneriSicurezza ? parseFloat(formData.oneri_sicurezza || formData.oneriSicurezza) : 0,
     ribasso_asta: formData.ribasso_asta || formData.ribassoAsta ? parseFloat(formData.ribasso_asta || formData.ribassoAsta) : 0,
     modalita_calcolo_sal: formData.modalita_calcolo_sal || formData.modalitaCalcoloSal || 'solo_lavori',
     

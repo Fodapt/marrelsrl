@@ -1,6 +1,6 @@
 // src/contexts/DataContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase, supabaseHelpers } from '../lib/supabaseClient';
+import { supabase, supabaseHelpers, getUserCompany } from '../lib/supabaseClient';
 import { useAuth } from './AuthContext';
 
 const DataContext = createContext();
@@ -46,7 +46,9 @@ export const DataProvider = ({ children }) => {
     gare: [],
     qualificheSoa: [],      
     categorieQualificate: [],
-    ati: [] 
+    ati: [],
+    atiMembri: [],        
+    atiQualifiche: [] 
   });
 
   const [loading, setLoading] = useState({
@@ -99,7 +101,9 @@ export const DataProvider = ({ children }) => {
     gare: 'gare',
     qualificheSoa: 'qualifiche_soa',         
     categorieQualificate: 'categorie_qualificate',
-    ati: 'ati' 
+    ati: 'ati',
+    atiMembri: 'ati_membri',          
+    atiQualifiche: 'ati_qualifiche' 
   };
 
   const criticalTables = ['lavoratori', 'cantieri', 'fornitori', 'clienti'];
@@ -115,16 +119,20 @@ export const DataProvider = ({ children }) => {
   setErrors(prev => ({ ...prev, [key]: null }));
 
   try {
-    // ✅ Se è la tabella ATI, carica anche membri e qualifiche
-    let query;
+    // ✅ Query speciale per ATI con membri (le qualifiche sono già JSONB dentro membri)
     if (key === 'ati') {
+      const companyResult = await getUserCompany();
+      if (!companyResult.success) {
+        throw new Error(companyResult.error);
+      }
+
       const { data: atiData, error } = await supabase
         .from(tableName)
         .select(`
           *,
-          membri:ati_membri(*),
-          qualifiche:ati_qualifiche(*)
+          membri:ati_membri(*)
         `)
+        .eq('azienda', companyResult.azienda)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -136,7 +144,7 @@ export const DataProvider = ({ children }) => {
       return;
     }
     
-    // ✅ Per tutte le altre tabelle, usa il metodo esistente
+    // ✅ Per tutte le altre tabelle
     const result = await supabaseHelpers.getAll(tableName);
     const duration = performance.now() - startTime;
     performanceLog.logQuery(tableName, duration);
@@ -169,7 +177,6 @@ export const DataProvider = ({ children }) => {
     setData(prev => ({ ...prev, [key]: [] }));
   }
 };
-
   // ---------------------------
   // FETCH ALL
   // ---------------------------

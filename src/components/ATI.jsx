@@ -38,6 +38,13 @@ function ATI() {
     quota_percentuale: ''
   });
 
+// Qualifiche del membro in fase di aggiunta
+  const [qualificheMembro, setQualificheMembro] = useState([]);
+  const [nuovaQualificaMembro, setNuovaQualificaMembro] = useState({
+    categoria: '',
+    classifica: '',
+    importo_qualificato: ''
+  });
   // Stati disponibili
   const statiATI = [
     { value: 'costituenda', label: '📝 In Costituzione', color: 'bg-yellow-50 text-yellow-700' },
@@ -85,7 +92,7 @@ function ATI() {
   }, [ati]);
 
   // Aggiungi membro
-  const aggiungiMembro = () => {
+ const aggiungiMembro = () => {
     if (!nuovoMembro.ragione_sociale || !nuovoMembro.piva || !nuovoMembro.quota_percentuale) {
       alert('⚠️ Compila tutti i campi del membro');
       return;
@@ -102,18 +109,57 @@ function ATI() {
       return;
     }
 
-    setMembri([...membri, { ...nuovoMembro }]);
+    setMembri([...membri, { 
+      ...nuovoMembro,
+      qualifiche: [...qualificheMembro] // Salva le qualifiche del membro
+    }]);
     setNuovoMembro({
       ruolo: 'mandante',
       ragione_sociale: '',
       piva: '',
       quota_percentuale: ''
     });
+    setQualificheMembro([]); // Reset qualifiche
   };
 
   // Rimuovi membro
   const rimuoviMembro = (index) => {
     setMembri(membri.filter((_, i) => i !== index));
+  };
+// Aggiungi qualifica al membro
+  const aggiungiQualificaMembro = () => {
+    if (!nuovaQualificaMembro.categoria || !nuovaQualificaMembro.classifica) {
+      alert('⚠️ Compila categoria e classifica');
+      return;
+    }
+    
+    const importo = nuovaQualificaMembro.classifica === 'VIII' 
+      ? 999999999 
+      : parseFloat(nuovaQualificaMembro.importo_qualificato);
+
+    if (nuovaQualificaMembro.classifica !== 'VIII' && (!importo || importo <= 0)) {
+      alert('⚠️ Inserisci un importo valido');
+      return;
+    }
+
+    // Verifica se categoria già presente
+    if (qualificheMembro.find(q => q.categoria === nuovaQualificaMembro.categoria)) {
+      alert('⚠️ Categoria già presente per questo membro');
+      return;
+    }
+
+    setQualificheMembro([...qualificheMembro, {
+      categoria: nuovaQualificaMembro.categoria,
+      classifica: nuovaQualificaMembro.classifica,
+      importo_qualificato: importo
+    }]);
+    
+    setNuovaQualificaMembro({ categoria: '', classifica: '', importo_qualificato: '' });
+  };
+
+  // Rimuovi qualifica del membro
+  const rimuoviQualificaMembro = (index) => {
+    setQualificheMembro(qualificheMembro.filter((_, i) => i !== index));
   };
 
   // Reset form
@@ -136,10 +182,11 @@ function ATI() {
       piva: '',
       quota_percentuale: ''
     });
+    setQualificheMembro([]);
+    setNuovaQualificaMembro({ categoria: '', classifica: '', importo_qualificato: '' });
     setEditingId(null);
     setShowForm(false);
   };
-
   // Salva ATI
   const handleSave = async () => {
     if (!formData.codice_ati || !formData.nome || !formData.mandataria_ragione_sociale) {
@@ -185,21 +232,28 @@ function ATI() {
       // Per semplicità, qui va gestito con logica dedicata
       
     } else {
-      result = await addRecord('ati', dataToSave);
+  result = await addRecord('ati', dataToSave);
+  
+  if (result.success && result.data) {
+    // Inserisci membri
+    for (const membro of membri) {
+      const membroResult = await addRecord('atiMembri', {
+        ati_id: result.data.id,
+        ruolo: membro.ruolo,
+        ragione_sociale: membro.ragione_sociale,
+        piva: membro.piva,
+        quota_percentuale: parseFloat(membro.quota_percentuale),
+        qualifiche: membro.qualifiche || []
+      });
       
-      if (result.success && result.data) {
-        // Inserisci membri
-        for (const membro of membri) {
-          await addRecord('ati_membri', {
-            ati_id: result.data.id,
-            ruolo: membro.ruolo,
-            ragione_sociale: membro.ragione_sociale,
-            piva: membro.piva,
-            quota_percentuale: parseFloat(membro.quota_percentuale)
-          });
-        }
+      if (!membroResult.success) {
+        console.error('❌ Errore membro:', membroResult.error);
+        alert(`❌ Errore: ${membroResult.error}`);
+        break;
       }
     }
+  }
+}
 
     setSaving(false);
 
@@ -253,9 +307,12 @@ function ATI() {
         ruolo: m.ruolo,
         ragione_sociale: m.ragione_sociale,
         piva: m.piva,
-        quota_percentuale: m.quota_percentuale
+        quota_percentuale: m.quota_percentuale,
+        qualifiche: m.qualifiche || []
       })));
     }
+    
+ 
     
     setEditingId(atiItem.id);
     setShowForm(true);
@@ -460,30 +517,46 @@ function ATI() {
             {membri.length > 0 && (
               <div className="mb-4 space-y-2">
                 {membri.map((membro, index) => (
-                  <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          membro.ruolo === 'mandataria' 
-                            ? 'bg-blue-100 text-blue-700' 
-                            : 'bg-gray-100 text-gray-700'
-                        }`}>
-                          {membro.ruolo === 'mandataria' ? '👑 Mandataria' : '🤝 Mandante'}
-                        </span>
-                        <span className="font-semibold text-gray-800">{membro.ragione_sociale}</span>
-                        <span className="text-sm text-gray-600">P.IVA: {membro.piva}</span>
+                  <div key={index} className="p-3 bg-gray-50 rounded-lg border">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            membro.ruolo === 'mandataria' 
+                              ? 'bg-blue-100 text-blue-700' 
+                              : 'bg-gray-100 text-gray-700'
+                          }`}>
+                            {membro.ruolo === 'mandataria' ? '👑 Mandataria' : '🤝 Mandante'}
+                          </span>
+                          <span className="font-semibold text-gray-800">{membro.ragione_sociale}</span>
+                          <span className="text-sm text-gray-600">P.IVA: {membro.piva}</span>
+                        </div>
                       </div>
+                      <div className="text-right">
+                        <span className="font-bold text-blue-600 text-lg">{membro.quota_percentuale}%</span>
+                      </div>
+                      <button
+                        onClick={() => rimuoviMembro(index)}
+                        className="text-red-600 hover:text-red-800 text-xl"
+                        title="Rimuovi membro"
+                      >
+                        🗑️
+                      </button>
                     </div>
-                    <div className="text-right">
-                      <span className="font-bold text-blue-600 text-lg">{membro.quota_percentuale}%</span>
-                    </div>
-                    <button
-                      onClick={() => rimuoviMembro(index)}
-                      className="text-red-600 hover:text-red-800 text-xl"
-                      title="Rimuovi membro"
-                    >
-                      🗑️
-                    </button>
+                    
+                    {/* Qualifiche del Membro */}
+                    {membro.qualifiche && membro.qualifiche.length > 0 && (
+                      <div className="mt-2 pt-2 border-t">
+                        <div className="text-xs text-gray-600 mb-1">Qualifiche SOA:</div>
+                        <div className="flex flex-wrap gap-1">
+                          {membro.qualifiche.map((qual, qIdx) => (
+                            <span key={qIdx} className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">
+                              {qual.categoria} ({qual.classifica})
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
                 
@@ -562,8 +635,98 @@ function ATI() {
                 </div>
               </div>
             </div>
-          </div>
+         
+{/* Qualifiche del Membro */}
+            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h5 className="font-semibold text-gray-700 mb-3">🏆 Qualifiche SOA del Membro</h5>
+              <p className="text-xs text-gray-600 mb-3">
+                Aggiungi le categorie SOA possedute da questa azienda associata
+              </p>
 
+              {/* Lista Qualifiche del Membro */}
+              {qualificheMembro.length > 0 && (
+                <div className="mb-3 space-y-2">
+                  {qualificheMembro.map((qual, index) => (
+                    <div key={index} className="flex items-center gap-2 p-2 bg-white rounded border">
+                      <div className="flex-1">
+                        <span className="font-bold text-green-700">{qual.categoria}</span>
+                        <span className="text-gray-600 mx-2">•</span>
+                        <span className="text-gray-700">Class. {qual.classifica}</span>
+                        <span className="text-gray-600 mx-2">•</span>
+                        <span className="text-gray-700 text-sm">
+                          {qual.importo_qualificato === 999999999 
+                            ? 'Illimitato' 
+                            : `€ ${parseFloat(qual.importo_qualificato).toLocaleString('it-IT')}`
+                          }
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => rimuoviQualificaMembro(index)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Form Aggiungi Qualifica Membro */}
+              <div className="grid grid-cols-4 gap-2">
+                <div>
+                  <input
+                    type="text"
+                    className="border rounded px-2 py-1 w-full text-sm"
+                    placeholder="Es: OG1, OS3"
+                    value={nuovaQualificaMembro.categoria}
+                    onChange={(e) => setNuovaQualificaMembro({...nuovaQualificaMembro, categoria: e.target.value.toUpperCase()})}
+                  />
+                </div>
+
+                <div>
+                  <select
+                    className="border rounded px-2 py-1 w-full text-sm"
+                    value={nuovaQualificaMembro.classifica}
+                    onChange={(e) => setNuovaQualificaMembro({...nuovaQualificaMembro, classifica: e.target.value})}
+                  >
+                    <option value="">Classifica</option>
+                    <option value="I">I</option>
+                    <option value="II">II</option>
+                    <option value="III">III</option>
+                    <option value="III-bis">III-bis</option>
+                    <option value="IV">IV</option>
+                    <option value="IV-bis">IV-bis</option>
+                    <option value="V">V</option>
+                    <option value="VI">VI</option>
+                    <option value="VII">VII</option>
+                    <option value="VIII">VIII</option>
+                  </select>
+                </div>
+
+                <div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="border rounded px-2 py-1 w-full text-sm"
+                    placeholder="Importo"
+                    value={nuovaQualificaMembro.importo_qualificato}
+                    onChange={(e) => setNuovaQualificaMembro({...nuovaQualificaMembro, importo_qualificato: e.target.value})}
+                    disabled={nuovaQualificaMembro.classifica === 'VIII'}
+                  />
+                </div>
+
+                <div>
+                  <button
+                    onClick={aggiungiQualificaMembro}
+                    className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 w-full"
+                  >
+                    + Aggiungi
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
           {/* Pulsanti */}
           <div className="flex gap-2 mt-6">
             <button
@@ -676,6 +839,38 @@ function ATI() {
                     </div>
                   </div>
                 )}
+
+                {/* Qualifiche SOA Aggregate */}
+                {(() => {
+                  const qualificheAggregate = new Map();
+                  (atiItem.membri || []).forEach(membro => {
+                    (membro.qualifiche || []).forEach(qual => {
+                      const existing = qualificheAggregate.get(qual.categoria);
+                      if (!existing || parseFloat(qual.importo_qualificato) > parseFloat(existing.importo_qualificato)) {
+                        qualificheAggregate.set(qual.categoria, qual);
+                      }
+                    });
+                  });
+                  
+                  const qualArray = Array.from(qualificheAggregate.values());
+                  
+                  return qualArray.length > 0 && (
+                    <div className="border-t pt-4 mt-4">
+                      <h4 className="font-semibold text-gray-700 mb-3">
+                        🏆 Qualifiche SOA Aggregate ({qualArray.length})
+                      </h4>
+                      <div className="grid grid-cols-4 gap-2">
+                        {qualArray.map((qual, idx) => (
+                          <div key={idx} className="p-2 bg-green-50 rounded border border-green-200 text-sm">
+                            <span className="font-bold text-green-700">{qual.categoria}</span>
+                            <span className="text-gray-600"> • </span>
+                            <span className="text-gray-700">Class. {qual.classifica}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             );
           })

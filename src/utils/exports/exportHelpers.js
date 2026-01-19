@@ -278,7 +278,7 @@ export const getDocumentHeader = (title, subtitle = null) => `
 export const getStandardFooter = () => {
   return `
     <div style="margin-top: 40px; padding: 20px; background: #f3f4f6 !important; border-top: 2px solid #1e40af; text-align: center; font-size: 9px; color: #6b7280;">
-      <p style="margin: 0;"><strong>Marrel S.r.l.</strong></p>
+      <p style="margin: 0;"><strong>{profile?.azienda}</strong></p>
       <p style="margin: 5px 0;">Documento generato automaticamente dal sistema - ${formatDateTime()}</p>
     </div>
   `;

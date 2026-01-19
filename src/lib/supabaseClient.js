@@ -25,12 +25,24 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
-// ⚡ HELPER: Pulisce oggetti da undefined, null, stringhe vuote
+// ⚡ HELPER: Pulisce oggetti da undefined, null, stringhe vuote (per CREATE)
 const cleanObject = (obj) => {
   return Object.entries(obj).reduce((acc, [key, value]) => {
     // Mantieni false, 0, array vuoti, ma rimuovi undefined, null, stringhe vuote
     if (value !== undefined && value !== null && value !== '') {
       acc[key] = value;
+    }
+    return acc;
+  }, {});
+};
+
+// 🆕 HELPER: Per UPDATE - mantiene null per cancellare valori
+const cleanObjectForUpdate = (obj) => {
+  return Object.entries(obj).reduce((acc, [key, value]) => {
+    // Rimuovi solo undefined
+    if (value !== undefined) {
+      // Converti stringhe vuote in null
+      acc[key] = value === '' ? null : value;
     }
     return acc;
   }, {});
@@ -46,7 +58,7 @@ export const handleSupabaseError = (error) => {
 };
 
 // ✅ FUNZIONE PER OTTENERE L'AZIENDA DELL'UTENTE LOGGATO
-const getUserCompany = async () => {
+export const getUserCompany = async () => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -175,7 +187,7 @@ export const supabaseHelpers = {
     }
 
     // ⚡ PULIZIA: Rimuovi campi undefined, null, stringhe vuote
-    const cleanUpdates = cleanObject(updates);
+    const cleanUpdates = cleanObjectForUpdate(updates);
     console.log(`📤 Clean updates:`, cleanUpdates);
 
     const { data, error } = await supabase
