@@ -39,9 +39,10 @@ function Header({ sidebarOpen, setSidebarOpen }) {
                   {profile.nome} {profile.cognome}
                 </p>
                 <p className="text-xs text-blue-200">
-                  {profile.ruolo === 'admin' ? '👨‍💼 Admin' : 
-                   profile.ruolo === 'manager' ? '📋 Manager' : 
-                   '👷 Operativo'}
+  {profile.ruolo === 'super_admin' ? '👑 Super Admin' : 
+   profile.ruolo === 'admin' ? '💼 Admin' : 
+   profile.ruolo === 'manager' ? '📊 Manager' : 
+   '📋 Amministrativo'}
                 </p>
               </div>
             )}

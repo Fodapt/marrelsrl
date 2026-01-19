@@ -1,0 +1,688 @@
+// src/components/ATI.jsx
+import { useState, useMemo } from 'react';
+import { useData } from '../contexts/DataContext';
+
+function ATI() {
+  const { 
+    ati,
+    gare,
+    addRecord, 
+    updateRecord, 
+    deleteRecord,
+    loading 
+  } = useData();
+
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  // Form principale ATI
+  const [formData, setFormData] = useState({
+    codice_ati: '',
+    nome: '',
+    tipo: 'orizzontale',
+    mandataria_ragione_sociale: '',
+    mandataria_piva: '',
+    stato: 'costituenda',
+    data_costituzione: '',
+    data_scioglimento: '',
+    note: ''
+  });
+
+  // Membri ATI
+  const [membri, setMembri] = useState([]);
+  const [nuovoMembro, setNuovoMembro] = useState({
+    ruolo: 'mandante',
+    ragione_sociale: '',
+    piva: '',
+    quota_percentuale: ''
+  });
+
+  // Stati disponibili
+  const statiATI = [
+    { value: 'costituenda', label: '📝 In Costituzione', color: 'bg-yellow-50 text-yellow-700' },
+    { value: 'attiva', label: '✅ Attiva', color: 'bg-green-50 text-green-700' },
+    { value: 'sciolta', label: '❌ Sciolta', color: 'bg-red-50 text-red-700' }
+  ];
+
+  const tipiATI = [
+    { value: 'orizzontale', label: '➡️ Orizzontale', desc: 'Imprese che svolgono lavori omogenei' },
+    { value: 'verticale', label: '⬇️ Verticale', desc: 'Impresa principale + subappaltatori' },
+    { value: 'mista', label: '🔄 Mista', desc: 'Combinazione orizzontale e verticale' }
+  ];
+
+  // Utility
+  const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('it-IT');
+  };
+
+  const getStatoInfo = (stato) => {
+    return statiATI.find(s => s.value === stato) || statiATI[0];
+  };
+
+  // Calcola totale quote
+  const totaleQuote = useMemo(() => {
+    return membri.reduce((sum, m) => sum + parseFloat(m.quota_percentuale || 0), 0);
+  }, [membri]);
+
+  // Conta gare collegate
+  const contaGareCollegate = (atiId) => {
+    return gare.filter(g => g.ati_id === atiId).length;
+  };
+
+  // Statistiche
+  const statistiche = useMemo(() => {
+    return {
+      totale: ati.length,
+      costituenda: ati.filter(a => a.stato === 'costituenda').length,
+      attive: ati.filter(a => a.stato === 'attiva').length,
+      sciolte: ati.filter(a => a.stato === 'sciolta').length,
+      orizzontali: ati.filter(a => a.tipo === 'orizzontale').length,
+      verticali: ati.filter(a => a.tipo === 'verticale').length,
+      miste: ati.filter(a => a.tipo === 'mista').length
+    };
+  }, [ati]);
+
+  // Aggiungi membro
+  const aggiungiMembro = () => {
+    if (!nuovoMembro.ragione_sociale || !nuovoMembro.piva || !nuovoMembro.quota_percentuale) {
+      alert('⚠️ Compila tutti i campi del membro');
+      return;
+    }
+
+    const quota = parseFloat(nuovoMembro.quota_percentuale);
+    if (quota <= 0 || quota > 100) {
+      alert('⚠️ La quota deve essere tra 0 e 100%');
+      return;
+    }
+
+    if (totaleQuote + quota > 100) {
+      alert(`⚠️ Il totale delle quote supererebbe il 100% (attuale: ${totaleQuote.toFixed(2)}%)`);
+      return;
+    }
+
+    setMembri([...membri, { ...nuovoMembro }]);
+    setNuovoMembro({
+      ruolo: 'mandante',
+      ragione_sociale: '',
+      piva: '',
+      quota_percentuale: ''
+    });
+  };
+
+  // Rimuovi membro
+  const rimuoviMembro = (index) => {
+    setMembri(membri.filter((_, i) => i !== index));
+  };
+
+  // Reset form
+  const resetForm = () => {
+    setFormData({
+      codice_ati: '',
+      nome: '',
+      tipo: 'orizzontale',
+      mandataria_ragione_sociale: '',
+      mandataria_piva: '',
+      stato: 'costituenda',
+      data_costituzione: '',
+      data_scioglimento: '',
+      note: ''
+    });
+    setMembri([]);
+    setNuovoMembro({
+      ruolo: 'mandante',
+      ragione_sociale: '',
+      piva: '',
+      quota_percentuale: ''
+    });
+    setEditingId(null);
+    setShowForm(false);
+  };
+
+  // Salva ATI
+  const handleSave = async () => {
+    if (!formData.codice_ati || !formData.nome || !formData.mandataria_ragione_sociale) {
+      alert('⚠️ Compila i campi obbligatori:\n- Codice ATI\n- Nome\n- Mandataria');
+      return;
+    }
+
+    if (membri.length === 0) {
+      alert('⚠️ Aggiungi almeno un membro all\'ATI');
+      return;
+    }
+
+    const mandataria = membri.find(m => m.ruolo === 'mandataria');
+    if (!mandataria) {
+      alert('⚠️ Deve esserci almeno un membro con ruolo Mandataria');
+      return;
+    }
+
+    if (Math.abs(totaleQuote - 100) > 0.01) {
+      alert(`⚠️ Il totale delle quote deve essere 100% (attuale: ${totaleQuote.toFixed(2)}%)`);
+      return;
+    }
+
+    setSaving(true);
+
+    const dataToSave = {
+      codice_ati: formData.codice_ati,
+      nome: formData.nome,
+      tipo: formData.tipo,
+      mandataria_ragione_sociale: formData.mandataria_ragione_sociale,
+      mandataria_piva: formData.mandataria_piva || null,
+      stato: formData.stato,
+      data_costituzione: formData.data_costituzione || null,
+      data_scioglimento: formData.data_scioglimento || null,
+      note: formData.note || null
+    };
+
+    let result;
+    if (editingId) {
+      result = await updateRecord('ati', editingId, dataToSave);
+      
+      // TODO: Gestire aggiornamento membri (eliminare vecchi e creare nuovi)
+      // Per semplicità, qui va gestito con logica dedicata
+      
+    } else {
+      result = await addRecord('ati', dataToSave);
+      
+      if (result.success && result.data) {
+        // Inserisci membri
+        for (const membro of membri) {
+          await addRecord('ati_membri', {
+            ati_id: result.data.id,
+            ruolo: membro.ruolo,
+            ragione_sociale: membro.ragione_sociale,
+            piva: membro.piva,
+            quota_percentuale: parseFloat(membro.quota_percentuale)
+          });
+        }
+      }
+    }
+
+    setSaving(false);
+
+    if (result.success) {
+      alert(editingId ? '✅ ATI aggiornata!' : '✅ ATI creata!');
+      resetForm();
+    } else {
+      alert('❌ Errore: ' + result.error);
+    }
+  };
+
+  // Elimina ATI
+  const handleDelete = async (atiItem) => {
+    const gareCollegate = contaGareCollegate(atiItem.id);
+    
+    if (gareCollegate > 0) {
+      if (!confirm(`⚠️ Questa ATI è collegata a ${gareCollegate} gare.\n\nEliminando l'ATI, le gare perderanno il collegamento.\n\nConfermi l'eliminazione?`)) {
+        return;
+      }
+    } else {
+      if (!confirm(`❌ Eliminare l'ATI ${atiItem.codice_ati}?\n\nQuesta azione è irreversibile!`)) {
+        return;
+      }
+    }
+
+    const result = await deleteRecord('ati', atiItem.id);
+    if (result.success) {
+      alert('✅ ATI eliminata!');
+    } else {
+      alert('❌ Errore: ' + result.error);
+    }
+  };
+
+  // Edit ATI
+  const handleEdit = (atiItem) => {
+    setFormData({
+      codice_ati: atiItem.codice_ati,
+      nome: atiItem.nome,
+      tipo: atiItem.tipo,
+      mandataria_ragione_sociale: atiItem.mandataria_ragione_sociale,
+      mandataria_piva: atiItem.mandataria_piva || '',
+      stato: atiItem.stato,
+      data_costituzione: atiItem.data_costituzione || '',
+      data_scioglimento: atiItem.data_scioglimento || '',
+      note: atiItem.note || ''
+    });
+    
+    // Carica membri
+    if (atiItem.membri && atiItem.membri.length > 0) {
+      setMembri(atiItem.membri.map(m => ({
+        ruolo: m.ruolo,
+        ragione_sociale: m.ragione_sociale,
+        piva: m.piva,
+        quota_percentuale: m.quota_percentuale
+      })));
+    }
+    
+    setEditingId(atiItem.id);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  if (loading.critical) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Caricamento ATI...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">🤝 Gestione ATI</h2>
+            <p className="text-sm text-gray-600 mt-1">
+              Associazioni Temporanee di Imprese per gare d'appalto
+            </p>
+          </div>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+          >
+            {showForm ? '✕ Chiudi' : '+ Nuova ATI'}
+          </button>
+        </div>
+
+        {/* Statistiche */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+            <div className="text-sm text-blue-700 mb-1">Totale ATI</div>
+            <div className="text-3xl font-bold text-blue-900">{statistiche.totale}</div>
+          </div>
+          <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+            <div className="text-sm text-yellow-700 mb-1">In Costituzione</div>
+            <div className="text-3xl font-bold text-yellow-900">{statistiche.costituenda}</div>
+          </div>
+          <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+            <div className="text-sm text-green-700 mb-1">Attive</div>
+            <div className="text-3xl font-bold text-green-900">{statistiche.attive}</div>
+          </div>
+          <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+            <div className="text-sm text-red-700 mb-1">Sciolte</div>
+            <div className="text-3xl font-bold text-red-900">{statistiche.sciolte}</div>
+          </div>
+          <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+            <div className="text-sm text-purple-700 mb-1">Orizzontali</div>
+            <div className="text-3xl font-bold text-purple-900">{statistiche.orizzontali}</div>
+          </div>
+          <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+            <div className="text-sm text-indigo-700 mb-1">Verticali</div>
+            <div className="text-3xl font-bold text-indigo-900">{statistiche.verticali}</div>
+          </div>
+          <div className="bg-cyan-50 p-4 rounded-lg border border-cyan-200">
+            <div className="text-sm text-cyan-700 mb-1">Miste</div>
+            <div className="text-3xl font-bold text-cyan-900">{statistiche.miste}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Form */}
+      {showForm && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold mb-4">
+            {editingId ? '✏️ Modifica ATI' : '➕ Nuova ATI'}
+          </h3>
+          
+          <div className="grid grid-cols-3 gap-4">
+            {/* Codice ATI */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Codice ATI *</label>
+              <input
+                type="text"
+                className="border rounded px-3 py-2 w-full"
+                placeholder="Es: ATI-2024-001"
+                value={formData.codice_ati}
+                onChange={(e) => setFormData({...formData, codice_ati: e.target.value})}
+              />
+            </div>
+
+            {/* Nome */}
+            <div className="col-span-2">
+              <label className="block text-sm font-medium mb-1">Nome ATI *</label>
+              <input
+                type="text"
+                className="border rounded px-3 py-2 w-full"
+                placeholder="Nome descrittivo dell'ATI"
+                value={formData.nome}
+                onChange={(e) => setFormData({...formData, nome: e.target.value})}
+              />
+            </div>
+
+            {/* Tipo ATI */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Tipo ATI</label>
+              <select
+                className="border rounded px-3 py-2 w-full"
+                value={formData.tipo}
+                onChange={(e) => setFormData({...formData, tipo: e.target.value})}
+              >
+                {tipiATI.map(tipo => (
+                  <option key={tipo.value} value={tipo.value}>
+                    {tipo.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                {tipiATI.find(t => t.value === formData.tipo)?.desc}
+              </p>
+            </div>
+
+            {/* Stato */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Stato</label>
+              <select
+                className="border rounded px-3 py-2 w-full"
+                value={formData.stato}
+                onChange={(e) => setFormData({...formData, stato: e.target.value})}
+              >
+                {statiATI.map(stato => (
+                  <option key={stato.value} value={stato.value}>
+                    {stato.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Mandataria */}
+            <div className="col-span-1">
+              <label className="block text-sm font-medium mb-1">Mandataria (Capogruppo) *</label>
+              <input
+                type="text"
+                className="border rounded px-3 py-2 w-full"
+                placeholder="Ragione sociale mandataria"
+                value={formData.mandataria_ragione_sociale}
+                onChange={(e) => setFormData({...formData, mandataria_ragione_sociale: e.target.value})}
+              />
+            </div>
+
+            {/* P.IVA Mandataria */}
+            <div>
+              <label className="block text-sm font-medium mb-1">P.IVA Mandataria</label>
+              <input
+                type="text"
+                className="border rounded px-3 py-2 w-full"
+                placeholder="IT12345678901"
+                value={formData.mandataria_piva}
+                onChange={(e) => setFormData({...formData, mandataria_piva: e.target.value})}
+              />
+            </div>
+
+            {/* Data Costituzione */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Data Costituzione</label>
+              <input
+                type="date"
+                className="border rounded px-3 py-2 w-full"
+                value={formData.data_costituzione}
+                onChange={(e) => setFormData({...formData, data_costituzione: e.target.value})}
+              />
+            </div>
+
+            {/* Data Scioglimento */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Data Scioglimento</label>
+              <input
+                type="date"
+                className="border rounded px-3 py-2 w-full"
+                value={formData.data_scioglimento}
+                onChange={(e) => setFormData({...formData, data_scioglimento: e.target.value})}
+                disabled={formData.stato !== 'sciolta'}
+              />
+            </div>
+
+            {/* Note */}
+            <div className="col-span-3">
+              <label className="block text-sm font-medium mb-1">Note</label>
+              <textarea
+                className="border rounded px-3 py-2 w-full"
+                rows="2"
+                placeholder="Note aggiuntive..."
+                value={formData.note}
+                onChange={(e) => setFormData({...formData, note: e.target.value})}
+              />
+            </div>
+          </div>
+
+          {/* Sezione Membri ATI */}
+          <div className="mt-6 border-t pt-6">
+            <h4 className="font-semibold text-gray-700 mb-4">👥 Membri ATI</h4>
+            
+            {/* Lista Membri */}
+            {membri.length > 0 && (
+              <div className="mb-4 space-y-2">
+                {membri.map((membro, index) => (
+                  <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          membro.ruolo === 'mandataria' 
+                            ? 'bg-blue-100 text-blue-700' 
+                            : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {membro.ruolo === 'mandataria' ? '👑 Mandataria' : '🤝 Mandante'}
+                        </span>
+                        <span className="font-semibold text-gray-800">{membro.ragione_sociale}</span>
+                        <span className="text-sm text-gray-600">P.IVA: {membro.piva}</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-bold text-blue-600 text-lg">{membro.quota_percentuale}%</span>
+                    </div>
+                    <button
+                      onClick={() => rimuoviMembro(index)}
+                      className="text-red-600 hover:text-red-800 text-xl"
+                      title="Rimuovi membro"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))}
+                
+                {/* Totale Quote */}
+                <div className="flex justify-end p-3 bg-blue-50 rounded-lg border-2 border-blue-200">
+                  <div className="text-right">
+                    <div className="text-sm text-gray-600">Totale Quote</div>
+                    <div className={`text-2xl font-bold ${
+                      Math.abs(totaleQuote - 100) < 0.01 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {totaleQuote.toFixed(2)}%
+                    </div>
+                    {Math.abs(totaleQuote - 100) >= 0.01 && (
+                      <div className="text-xs text-red-600">Deve essere 100%</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Form Aggiungi Membro */}
+            <div className="grid grid-cols-5 gap-3 items-end">
+              <div>
+                <label className="block text-sm font-medium mb-1">Ruolo</label>
+                <select
+                  className="border rounded px-3 py-2 w-full"
+                  value={nuovoMembro.ruolo}
+                  onChange={(e) => setNuovoMembro({...nuovoMembro, ruolo: e.target.value})}
+                >
+                  <option value="mandataria">👑 Mandataria</option>
+                  <option value="mandante">🤝 Mandante</option>
+                </select>
+              </div>
+
+              <div className="col-span-2">
+                <label className="block text-sm font-medium mb-1">Ragione Sociale</label>
+                <input
+                  type="text"
+                  className="border rounded px-3 py-2 w-full"
+                  placeholder="Nome azienda"
+                  value={nuovoMembro.ragione_sociale}
+                  onChange={(e) => setNuovoMembro({...nuovoMembro, ragione_sociale: e.target.value})}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">P.IVA</label>
+                <input
+                  type="text"
+                  className="border rounded px-3 py-2 w-full"
+                  placeholder="IT..."
+                  value={nuovoMembro.piva}
+                  onChange={(e) => setNuovoMembro({...nuovoMembro, piva: e.target.value})}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Quota %</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    className="border rounded px-3 py-2 w-full"
+                    placeholder="0.00"
+                    value={nuovoMembro.quota_percentuale}
+                    onChange={(e) => setNuovoMembro({...nuovoMembro, quota_percentuale: e.target.value})}
+                  />
+                  <button
+                    onClick={aggiungiMembro}
+                    className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 whitespace-nowrap"
+                  >
+                    + Aggiungi
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Pulsanti */}
+          <div className="flex gap-2 mt-6">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+            >
+              {saving ? 'Salvataggio...' : (editingId ? 'Aggiorna' : 'Salva')}
+            </button>
+            <button
+              onClick={resetForm}
+              disabled={saving}
+              className="bg-gray-500 text-white px-6 py-2 rounded hover:bg-gray-600 disabled:opacity-50"
+            >
+              Annulla
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Lista ATI */}
+      <div className="space-y-4">
+        {ati.length === 0 ? (
+          <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+            Nessuna ATI registrata. Clicca "+ Nuova ATI" per iniziare.
+          </div>
+        ) : (
+          ati.map(atiItem => {
+            const statoInfo = getStatoInfo(atiItem.stato);
+            const tipoInfo = tipiATI.find(t => t.value === atiItem.tipo);
+            const numGare = contaGareCollegate(atiItem.id);
+            const numMembri = atiItem.membri?.length || 0;
+
+            return (
+              <div key={atiItem.id} className="bg-white rounded-lg shadow p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-xl font-bold text-gray-800">{atiItem.codice_ati}</h3>
+                      <span className={`px-3 py-1 rounded text-sm ${statoInfo.color}`}>
+                        {statoInfo.label}
+                      </span>
+                      <span className="px-3 py-1 rounded text-sm bg-purple-100 text-purple-700">
+                        {tipoInfo?.label}
+                      </span>
+                    </div>
+                    <p className="text-gray-700 mb-3">{atiItem.nome}</p>
+                    <div className="grid grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-600">Mandataria:</span>{' '}
+                        <span className="font-medium">{atiItem.mandataria_ragione_sociale}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Membri:</span>{' '}
+                        <span className="font-medium">{numMembri}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Gare Collegate:</span>{' '}
+                        <span className="font-medium">{numGare}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Costituita il:</span>{' '}
+                        <span className="font-medium">{formatDate(atiItem.data_costituzione)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleEdit(atiItem)}
+                      className="text-blue-600 hover:text-blue-800 text-xl"
+                      title="Modifica"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onClick={() => handleDelete(atiItem)}
+                      className="text-red-600 hover:text-red-800 text-xl"
+                      title="Elimina"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+
+                {/* Membri */}
+                {atiItem.membri && atiItem.membri.length > 0 && (
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-gray-700 mb-3">👥 Membri</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      {atiItem.membri.map(membro => (
+                        <div key={membro.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                membro.ruolo === 'mandataria' 
+                                  ? 'bg-blue-100 text-blue-700' 
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}>
+                                {membro.ruolo === 'mandataria' ? '👑' : '🤝'}
+                              </span>
+                              <span className="font-semibold text-gray-800">{membro.ragione_sociale}</span>
+                            </div>
+                            <p className="text-xs text-gray-600 mt-1">P.IVA: {membro.piva}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className="font-bold text-blue-600">{membro.quota_percentuale}%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default ATI;

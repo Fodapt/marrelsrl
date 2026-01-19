@@ -30,6 +30,13 @@ import StoricoPaghe from './components/StoricoPaghe';
 import DttFormulari from './components/DttFormulari';
 import SituazioneFornitori from './components/SituazioneFornitori';
 import EconomicoCantiere from './components/EconomicoCantiere';
+import CreateCompany from './components/admin/CreateCompany';
+import GestioneUtenti from './components/admin/GestioneUtenti';
+import Polizze from './components/Polizze';
+import Gare from './components/Gare'; 
+import AttestazioniSOA from './components/AttestazioniSOA';
+import CruscottoGare from './components/CruscottoGare';
+import ATI from './components/ATI'; 
 
 // Componente principale con logica di autenticazione
 function AppContent() {
@@ -75,19 +82,19 @@ function AppContent() {
       <Route path="/dashboard" element={
         !user || !profile ? <Navigate to="/" replace /> : (
           <div className="min-h-screen bg-gray-50">
-  <Header 
-    sidebarOpen={sidebarOpen}
-    setSidebarOpen={setSidebarOpen}
-  />
-  
-  <Navigation 
-    activeTab={activeTab}
-    setActiveTab={setActiveTab}
-    sidebarOpen={sidebarOpen}
-    setSidebarOpen={setSidebarOpen}
-  />
+            <Header 
+              sidebarOpen={sidebarOpen}
+              setSidebarOpen={setSidebarOpen}
+            />
+            
+            <Navigation 
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              sidebarOpen={sidebarOpen}
+              setSidebarOpen={setSidebarOpen}
+            />
 
-  <main className="md:ml-64 px-4 py-6 pt-20 md:pt-6 pb-16">
+            <main className="md:ml-64 px-4 py-6 pt-20 md:pt-6 pb-16">
               {activeTab === 'dashboard' && <Dashboard {...commonProps} />}
               {activeTab === 'lavoratori' && <Lavoratori {...commonProps} />}
               {activeTab === 'unilav' && <Unilav {...commonProps} />}
@@ -103,20 +110,72 @@ function AppContent() {
               {activeTab === 'casse' && <CasseEdili {...commonProps} />}
               {activeTab === 'scadenzario' && <Scadenzario {...commonProps} />}
               {activeTab === 'rateizzi' && <Rateizzi {...commonProps} />}
-              {activeTab === 'acconti' && <Acconti {...commonProps} />}
-              {activeTab === 'fatture-emesse' && (profile.ruolo === 'admin' ? <FattureEmesse {...commonProps} /> : <AccessDenied />)}
-              {activeTab === 'storico-paghe' && (profile.ruolo === 'admin' ? <StoricoPaghe {...commonProps} /> : <AccessDenied />)}
-              {activeTab === 'contabilita' && (profile.ruolo === 'admin' ? <Contabilita {...commonProps} /> : <AccessDenied />)}
-              {activeTab === 'dtt-formulari' && <DttFormulari {...commonProps} />}
-              {activeTab === 'situazione-fornitori' && <SituazioneFornitori {...commonProps} />}
+              
+
+              {/* ✅ CRUSCOTTO GARE - Dashboard Ufficio Gare */}
+              {activeTab === 'cruscotto-gare' && <CruscottoGare {...commonProps} />}
+              {/* ✅ POLIZZE - Aggiunto rendering */}
+              {activeTab === 'polizze' && <Polizze {...commonProps} />}
+              {activeTab === 'gare' && <Gare {...commonProps} setActiveTab={setActiveTab} />}
+              {activeTab === 'attestazioni-soa' && <AttestazioniSOA {...commonProps} />}
+              {activeTab === 'ati' && <ATI {...commonProps} />} 
+
+              
+              {activeTab === 'acconti' && (
+                profile.ruolo !== 'operativo'
+                  ? <Acconti {...commonProps} /> 
+                  : <AccessDenied />
+              )}
+              {activeTab === 'fatture-emesse' && (
+                profile.ruolo !== 'operativo'
+                  ? <FattureEmesse {...commonProps} /> 
+                  : <AccessDenied />
+              )}
+              {activeTab === 'storico-paghe' && (
+                profile.ruolo !== 'operativo'
+                  ? <StoricoPaghe {...commonProps} /> 
+                  : <AccessDenied />
+              )}
+              {activeTab === 'contabilita' && (
+                profile.ruolo !== 'operativo'
+                  ? <Contabilita {...commonProps} /> 
+                  : <AccessDenied />
+              )}
+              {activeTab === 'dtt-formulari' && (
+                profile.ruolo !== 'operativo'
+                  ? <DttFormulari {...commonProps} /> 
+                  : <AccessDenied />
+              )}
+              {activeTab === 'situazione-fornitori' && (
+                profile.ruolo !== 'operativo'
+                  ? <SituazioneFornitori {...commonProps} /> 
+                  : <AccessDenied />
+              )}
               {activeTab === 'presenze' && <PresenzeCantieri {...commonProps} />}
-              {activeTab === 'economico-cantiere' && <EconomicoCantiere />}
+              {activeTab === 'economico-cantiere' && (
+                profile.ruolo !== 'operativo'
+                  ? <EconomicoCantiere {...commonProps} /> 
+                  : <AccessDenied />
+              )}
             </main>
 
             <Footer />
           </div>
         )
+      } />  
+      
+      {/* Route admin create company - solo super_admin */}
+      <Route path="/admin/create-company" element={
+        !user || !profile ? <Navigate to="/" replace /> : 
+        profile.ruolo === 'super_admin' ? <CreateCompany /> : <AccessDenied />
       } />
+
+      {/* Route gestione utenti - admin e super_admin */}
+      <Route path="/admin/gestione-utenti" element={
+        !user || !profile ? <Navigate to="/" replace /> : 
+        (profile.ruolo === 'admin' || profile.ruolo === 'super_admin') ? <GestioneUtenti /> : <AccessDenied />
+      } />
+    
     </Routes>
   );
 }

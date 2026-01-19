@@ -3,17 +3,46 @@ import { useAuth } from "../contexts/AuthContext";
 import { APP_CONFIG } from "../config/appConfig"; 
 
 function Navigation({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
-  const { profile } = useAuth();
+  const { profile, isSuperAdmin } = useAuth();
   const [openGroups, setOpenGroups] = useState(["risorse-umane"]);
 
-  // 🔐 Filtra i subtabs in base al ruolo
-  const filterSubtabsByRole = (subtabs) => {
-    if (!profile) return subtabs;
-    if (profile.ruolo === "admin") return subtabs;
-
-    const restrictedIds = ["fatture-emesse", "storico-paghe", "contabilita"];
+// 🔐 Filtra i subtabs in base al ruolo
+const filterSubtabsByRole = (subtabs) => {
+  if (!profile) return subtabs;
+  
+  // Super Admin: vede tutto
+  if (profile.ruolo === "super_admin") return subtabs;
+  
+  // Admin: tutto tranne "Crea Nuova Azienda"
+  if (profile.ruolo === "admin") {
+    const restrictedIds = ["create-company"];
     return subtabs.filter((sub) => !restrictedIds.includes(sub.id));
-  };
+  }
+  
+  // Manager: tutto tranne "Crea Nuova Azienda" e "Gestione Utenti"
+  if (profile.ruolo === "manager") {
+    const restrictedIds = ["create-company", "gestione-utenti"];
+    return subtabs.filter((sub) => !restrictedIds.includes(sub.id));
+  }
+  
+  // Operativo: accesso limitato
+  if (profile.ruolo === "operativo") {
+    const blockedIds = [
+      "storico-paghe",
+      "acconti",
+      "economico-cantiere",
+      "situazione-fornitori",
+      "dtt-formulari",
+      "fatture-emesse",
+      "contabilita",
+      "create-company",
+      "gestione-utenti"
+    ];
+    return subtabs.filter((sub) => !blockedIds.includes(sub.id));
+  }
+  
+  return subtabs;
+};
 
   const tabs = [
     { id: "dashboard", label: "Dashboard", icon: "🏠", type: "single" },
@@ -33,18 +62,32 @@ function Navigation({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
       ]),
     },
 
-    
-      {
-  id: "cantieri-commesse",
-  label: "Cantieri ecc...",
-  icon: "🏗️",
-  type: "group",
-      subtabs: [
+    {
+      id: "cantieri-commesse",
+      label: "Cantieri ecc...",
+      icon: "🏗️",
+      type: "group",
+      subtabs: filterSubtabsByRole([
         { id: "cantieri", label: "Cantieri", icon: "🏗️" },
         { id: "sal", label: "SAL", icon: "💰" },
         { id: "subappaltatori", label: "Subappaltatori", icon: "🏢" },
         { id: "economico-cantiere", label: "Economico Cantiere", icon: "📊" },
-      ],
+      ]),
+    },
+
+    // ✅ UFFICIO GARE - Struttura corretta come gruppo
+    {
+      id: "ufficio-gare",
+      label: "Ufficio Gare",
+      icon: "📋",
+      type: "group",
+      subtabs: filterSubtabsByRole([
+        { id: "cruscotto-gare", label: "Cruscotto Gare", icon: "📊" },
+        { id: "gare", label: "Gare", icon: "📋" },
+        { id: "polizze", label: "Polizze", icon: "🛡️" },
+        { id: "attestazioni-soa", label: "Attestazioni SOA", icon: "🏆" },
+        { id: "ati", label: "ATI", icon: "🤝" }
+      ]),
     },
 
     {
@@ -52,18 +95,18 @@ function Navigation({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
       label: "Fornitori ecc...",
       icon: "🏪",
       type: "group",
-      subtabs: [
+      subtabs: filterSubtabsByRole([
         { id: "fornitori", label: "Fornitori", icon: "🏪" },
         { id: "situazione-fornitori", label: "Situazione Fornitori", icon: "📦" },
         { id: "dtt-formulari", label: "DTT/Formulari", icon: "📋" },
-      ],
+      ]),
     },
 
     {
       id: "clienti-fatturazione",
-  label: "Clienti & Fatt.",
-  icon: "👔",
-  type: "group",
+      label: "Clienti & Fatt.",
+      icon: "👔",
+      type: "group",
       subtabs: filterSubtabsByRole([
         { id: "clienti", label: "Clienti", icon: "👔" },
         { id: "fatture-emesse", label: "Fatture Emesse", icon: "🧾" },
@@ -83,10 +126,22 @@ function Navigation({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
     },
 
     // 🚛 AUTOMEZZI (single, non più group)
-{ id: "automezzi", label: "Automezzi", icon: "🚛", type: "single" },
-{ id: "manutenzione-mezzi", label: "Manutenzioni Mezzi", icon: "🔧", type: "single" },
+    { id: "automezzi", label: "Automezzi", icon: "🚛", type: "single" },
+    { id: "manutenzione-mezzi", label: "Manutenzioni Mezzi", icon: "🔧", type: "single" },
     { id: "certificazioni", label: "Certificazioni", icon: "📋", type: "single" },
     { id: "scadenzario", label: "Scadenzario", icon: "📅", type: "single" },
+
+    // 📊 GESTIONE ADMIN (nuovo gruppo)
+    {
+      id: "gestione-admin",
+      label: "Gestione Admin",
+      icon: "⚙️",
+      type: "group",
+      subtabs: filterSubtabsByRole([
+        { id: "create-company", label: "Crea Nuova Azienda", icon: "➕" },
+        { id: "gestione-utenti", label: "Gestione Utenti", icon: "👥" }
+      ])
+    },
   ];
 
   const toggleGroup = (groupId) => {
@@ -98,6 +153,19 @@ function Navigation({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
   };
 
   const handleTabClick = (tabId) => {
+    // Route speciali admin
+    if (tabId === 'create-company') {
+      window.location.hash = '#/admin/create-company';
+      if (window.innerWidth < 768) setSidebarOpen(false);
+      return;
+    }
+    
+    if (tabId === 'gestione-utenti') {
+      window.location.hash = '#/admin/gestione-utenti';
+      if (window.innerWidth < 768) setSidebarOpen(false);
+      return;
+    }
+    
     setActiveTab(tabId);
     if (window.innerWidth < 768) setSidebarOpen(false);
   };
@@ -118,8 +186,6 @@ function Navigation({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         } md:translate-x-0`}
       >
-      
-
         {/* Menu */}
         <nav className="p-2">
           {tabs.map((tab) =>
@@ -160,34 +226,34 @@ function Navigation({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
                 </button>
 
                 {openGroups.includes(tab.id) && (
-  <div className="ml-6 mt-2 space-y-1 border-l-2 border-gray-200 pl-3">
-    {tab.subtabs.map((sub) => (
-      <button
-        key={sub.id}
-        onClick={() => handleTabClick(sub.id)}
-        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${
-          activeTab === sub.id
-            ? "bg-blue-600 text-white font-medium shadow-sm"
-            : "text-gray-600 hover:bg-blue-50 hover:translate-x-1"
-        }`}
-      >
-        <span className="text-base">{sub.icon}</span>
-        <span>{sub.label}</span>
-      </button>
-    ))}
-  </div>
-)}
+                  <div className="ml-6 mt-2 space-y-1 border-l-2 border-gray-200 pl-3">
+                    {tab.subtabs.map((sub) => (
+                      <button
+                        key={sub.id}
+                        onClick={() => handleTabClick(sub.id)}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${
+                          activeTab === sub.id
+                            ? "bg-blue-600 text-white font-medium shadow-sm"
+                            : "text-gray-600 hover:bg-blue-50 hover:translate-x-1"
+                        }`}
+                      >
+                        <span className="text-base">{sub.icon}</span>
+                        <span>{sub.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )
           )}
         </nav>
 
-      {/* Versione in basso */}
-<div className="mt-auto p-4 border-t border-gray-200 bg-gray-50">
-  <p className="text-xs text-gray-500 text-center">{APP_CONFIG.versionText}</p>
-  <p className="text-xs text-gray-400 text-center">{profile?.azienda}</p>
-</div>
-    </aside>
+        {/* Versione in basso */}
+        <div className="mt-auto p-4 border-t border-gray-200 bg-gray-50">
+          <p className="text-xs text-gray-500 text-center">{APP_CONFIG.versionText}</p>
+          <p className="text-xs text-gray-400 text-center">{profile?.azienda}</p>
+        </div>
+      </aside>
     </>
   );
 }

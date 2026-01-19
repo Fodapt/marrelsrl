@@ -5,7 +5,7 @@ import { exportCantieriPDF } from '../utils/exports/exportCantieriPDF';
 
 function Cantieri() {
   // ✅ USA IL CONTEXT
-  const { cantieri, loading, addRecord, updateRecord, deleteRecord } = useData();
+  const { cantieri, gare, ati, loading, addRecord, updateRecord, deleteRecord } = useData();
   
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -754,6 +754,18 @@ const statoLabels = {
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statoColors[stato]}`}>
                         {statoLabels[stato]}
                       </span>
+                        {/* ✅ BADGE ATI */}
+  {cant.gara_id && (() => {
+    const gara = gare.find(g => g.id === cant.gara_id);
+    if (gara?.ati_id) {
+      const atiCantiere = ati.find(a => a.id === gara.ati_id);
+      return atiCantiere && (
+        <span className="px-3 py-1 rounded text-sm bg-purple-100 text-purple-700 font-medium">
+          🤝 ATI: {atiCantiere.codice_ati}
+        </span>
+      );
+    }
+  })()}
                     </div>
                     <p className="text-gray-600">{cant.indirizzo}</p>
                   </div>

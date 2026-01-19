@@ -41,7 +41,12 @@ export const DataProvider = ({ children }) => {
     cassaEdileTotali: [],
     ordiniFornitori: [],
     documenti: [],
-    manutenzioniVeicoli: []
+    manutenzioniVeicoli: [],
+    polizze: [],
+    gare: [],
+    qualificheSoa: [],      
+    categorieQualificate: [],
+    ati: [] 
   });
 
   const [loading, setLoading] = useState({
@@ -89,7 +94,12 @@ export const DataProvider = ({ children }) => {
     cassaEdileTotali: 'cassa_edile_totali',
     ordiniFornitori: 'ordini_fornitori',
     documenti: 'documenti',
-    manutenzioniVeicoli: 'manutenzioni_veicoli' 
+    manutenzioniVeicoli: 'manutenzioni_veicoli',
+    polizze: 'polizze',
+    gare: 'gare',
+    qualificheSoa: 'qualifiche_soa',         
+    categorieQualificate: 'categorie_qualificate',
+    ati: 'ati' 
   };
 
   const criticalTables = ['lavoratori', 'cantieri', 'fornitori', 'clienti'];
@@ -105,6 +115,28 @@ export const DataProvider = ({ children }) => {
   setErrors(prev => ({ ...prev, [key]: null }));
 
   try {
+    // ✅ Se è la tabella ATI, carica anche membri e qualifiche
+    let query;
+    if (key === 'ati') {
+      const { data: atiData, error } = await supabase
+        .from(tableName)
+        .select(`
+          *,
+          membri:ati_membri(*),
+          qualifiche:ati_qualifiche(*)
+        `)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      const duration = performance.now() - startTime;
+      performanceLog.logQuery(tableName, duration);
+      
+      setData(prev => ({ ...prev, [key]: atiData || [] }));
+      return;
+    }
+    
+    // ✅ Per tutte le altre tabelle, usa il metodo esistente
     const result = await supabaseHelpers.getAll(tableName);
     const duration = performance.now() - startTime;
     performanceLog.logQuery(tableName, duration);
@@ -129,14 +161,14 @@ export const DataProvider = ({ children }) => {
       
       setData(prev => ({ ...prev, [key]: sortedData }));
     } else {
-        setErrors(prev => ({ ...prev, [key]: result.error }));
-        setData(prev => ({ ...prev, [key]: [] }));
-      }
-    } catch (error) {
-      setErrors(prev => ({ ...prev, [key]: error.message }));
+      setErrors(prev => ({ ...prev, [key]: result.error }));
       setData(prev => ({ ...prev, [key]: [] }));
     }
-  };
+  } catch (error) {
+    setErrors(prev => ({ ...prev, [key]: error.message }));
+    setData(prev => ({ ...prev, [key]: [] }));
+  }
+};
 
   // ---------------------------
   // FETCH ALL

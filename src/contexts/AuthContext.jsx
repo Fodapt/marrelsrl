@@ -224,34 +224,76 @@ export const AuthProvider = ({ children }) => {
   };
 
   const hasAccess = (section) => {
-    if (!profile) return false;
-    if (profile.ruolo === 'admin') return true;
+  if (!profile) return false;
+  if (profile.ruolo === 'admin') return true;
 
-    const restrictedSections = ['storicoPaghe', 'fattureEmesse', 'contabilita'];
-    if (restrictedSections.includes(section)) return false;
+  const restrictedSections = ['storicoPaghe', 'fattureEmesse', 'contabilita'];
+  if (restrictedSections.includes(section)) return false;
 
-    return true;
-  };
-
-  console.log('🎯 Auth state - authLoading:', authLoading, 'profileLoading:', profileLoading, 'User:', user?.email, 'Profile:', profile?.ruolo);
-
-  const value = {
-    user,
-    profile,
-    loading: authLoading || profileLoading,
-    authLoading,
-    profileLoading,
-    signIn,
-    signUp,
-    signOut,
-    resetPassword,
-    updatePassword,
-    checkSession,
-    hasAccess,
-    isAdmin: profile?.ruolo === 'admin',
-    isManager: profile?.ruolo === 'manager',
-    isOperativo: profile?.ruolo === 'operativo'
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return true;
 };
+
+// 🔐 Verifica se l'utente può vedere una sezione
+const canView = (section) => {
+  if (!profile) return false;
+
+  if (profile.ruolo === 'super_admin') return true;
+
+  if (profile.ruolo === 'admin') {
+    return section !== 'create-company';
+  }
+
+  if (profile.ruolo === 'manager') {
+    const blocked = ['create-company', 'gestione-utenti'];
+    return !blocked.includes(section);
+  }
+
+  if (profile.ruolo === 'operativo') {
+    const blocked = [
+      'storico-paghe',
+      'acconti',
+      'economico-cantiere',
+      'situazione-fornitori',
+      'dtt-formulari',
+      'fatture-emesse',
+      'contabilita',
+      'create-company',
+      'gestione-utenti'
+    ];
+    return !blocked.includes(section);
+  }
+
+  return false;
+};
+
+// 🔐 Verifica se l'utente può modificare una sezione
+const canEdit = (section) => {
+  if (!profile) return false;
+  return canView(section);
+};
+
+console.log('🎯 Auth state - authLoading:', authLoading, 'profileLoading:', profileLoading, 'User:', user?.email, 'Profile:', profile?.ruolo);
+
+const value = {
+  user,
+  profile,
+  loading: authLoading || profileLoading,
+  authLoading,
+  profileLoading,
+  signIn,
+  signUp,
+  signOut,
+  resetPassword,
+  updatePassword,
+  checkSession,
+  hasAccess,
+  canView,      // ✅ Ora è definita prima
+  canEdit,      // ✅ Ora è definita prima
+  isAdmin: profile?.ruolo === 'admin',
+  isSuperAdmin: profile?.ruolo === 'super_admin',
+  isManager: profile?.ruolo === 'manager',
+  isOperativo: profile?.ruolo === 'operativo'
+};
+
+return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}

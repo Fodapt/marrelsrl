@@ -219,13 +219,8 @@ function Login() {
 
         <div className="mt-6 text-center space-y-2">
           {mode === 'login' && (
-            <>
-              <button
-                onClick={() => setMode('signup')}
-                className="text-blue-600 hover:underline text-sm block w-full"
-              >
-                Non hai un account? Registrati
-              </button>
+  <>
+    {/* Signup pubblico rimosso - solo super admin può creare aziende */}
               <button
                 onClick={() => setMode('reset')}
                 className="text-blue-600 hover:underline text-sm block w-full"
