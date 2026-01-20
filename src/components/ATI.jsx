@@ -6,9 +6,11 @@ function ATI() {
   const { 
     ati,
     gare,
+    categorieQualificate, // ⚡ Qualifiche SOA di MARREL
     addRecord, 
     updateRecord, 
     deleteRecord,
+    fetchTable, // ⚡ AGGIUNTO per refresh
     loading 
   } = useData();
 
@@ -21,15 +23,14 @@ function ATI() {
     codice_ati: '',
     nome: '',
     tipo: 'orizzontale',
-    mandataria_ragione_sociale: '',
-    mandataria_piva: '',
+    marrel_ruolo: 'mandataria', // ⚡ NUOVO: ruolo di MARREL
     stato: 'costituenda',
     data_costituzione: '',
     data_scioglimento: '',
     note: ''
   });
 
-  // Membri ATI
+  // Membri ATI (ESTERNI - MARREL è implicito)
   const [membri, setMembri] = useState([]);
   const [nuovoMembro, setNuovoMembro] = useState({
     ruolo: 'mandante',
@@ -38,13 +39,14 @@ function ATI() {
     quota_percentuale: ''
   });
 
-// Qualifiche del membro in fase di aggiunta
+  // Qualifiche del membro in fase di aggiunta
   const [qualificheMembro, setQualificheMembro] = useState([]);
   const [nuovaQualificaMembro, setNuovaQualificaMembro] = useState({
     categoria: '',
     classifica: '',
     importo_qualificato: ''
   });
+
   // Stati disponibili
   const statiATI = [
     { value: 'costituenda', label: '📝 In Costituzione', color: 'bg-yellow-50 text-yellow-700' },
@@ -57,6 +59,28 @@ function ATI() {
     { value: 'verticale', label: '⬇️ Verticale', desc: 'Impresa principale + subappaltatori' },
     { value: 'mista', label: '🔄 Mista', desc: 'Combinazione orizzontale e verticale' }
   ];
+    // Categorie SOA complete
+  const categorieSOA = [
+    'OG1', 'OG2', 'OG3', 'OG4', 'OG5', 'OG6', 'OG7', 'OG8', 'OG9', 'OG10', 'OG11', 'OG12', 'OG13',
+    'OS1', 'OS2-A', 'OS2-B', 'OS3', 'OS4', 'OS5', 'OS6', 'OS7', 'OS8', 'OS9', 'OS10',
+    'OS11', 'OS12-A', 'OS12-B', 'OS13', 'OS14', 'OS15', 'OS16', 'OS17', 'OS18-A', 'OS18-B',
+    'OS19', 'OS20-A', 'OS20-B', 'OS21', 'OS22', 'OS23', 'OS24', 'OS25', 'OS26', 'OS27',
+    'OS28', 'OS29', 'OS30', 'OS31', 'OS32', 'OS33', 'OS34', 'OS35'
+  ];
+
+  // Classifiche SOA con importi
+  const classificheSOA = [
+    { value: 'I', label: 'I - € 258.000', importo: 258000 },
+    { value: 'II', label: 'II - € 516.000', importo: 516000 },
+    { value: 'III', label: 'III - € 1.033.000', importo: 1033000 },
+    { value: 'III-bis', label: 'III-bis - € 1.500.000', importo: 1500000 },
+    { value: 'IV', label: 'IV - € 2.582.000', importo: 2582000 },
+    { value: 'IV-bis', label: 'IV-bis - € 3.500.000', importo: 3500000 },
+    { value: 'V', label: 'V - € 5.165.000', importo: 5165000 },
+    { value: 'VI', label: 'VI - € 10.329.000', importo: 10329000 },
+    { value: 'VII', label: 'VII - € 15.494.000', importo: 15494000 },
+    { value: 'VIII', label: 'VIII - Illimitato', importo: 999999999 }
+  ];
 
   // Utility
   const formatDate = (dateString) => {
@@ -68,14 +92,64 @@ function ATI() {
     return statiATI.find(s => s.value === stato) || statiATI[0];
   };
 
-  // Calcola totale quote
-  const totaleQuote = useMemo(() => {
+  // ⚡ Calcola totale quote MEMBRI (escluso MARREL)
+  const totaleQuoteMembri = useMemo(() => {
     return membri.reduce((sum, m) => sum + parseFloat(m.quota_percentuale || 0), 0);
   }, [membri]);
+
+  // ⚡ Quota MARREL (automatica)
+  const quotaMarrel = useMemo(() => {
+    return Math.max(0, 100 - totaleQuoteMembri);
+  }, [totaleQuoteMembri]);
 
   // Conta gare collegate
   const contaGareCollegate = (atiId) => {
     return gare.filter(g => g.ati_id === atiId).length;
+  };
+
+  // ⚡ Qualifiche MARREL (da categorieQualificate)
+  const qualificheMarrel = useMemo(() => {
+    const map = new Map();
+    (categorieQualificate || []).forEach(cq => {
+      const existing = map.get(cq.categoria);
+      if (!existing || parseFloat(cq.importo_qualificato) > parseFloat(existing.importo_qualificato)) {
+        map.set(cq.categoria, {
+          categoria: cq.categoria,
+          classifica: cq.classifica,
+          importo_qualificato: cq.importo_qualificato
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [categorieQualificate]);
+
+  // ⚡ Qualifiche aggregate ATI (MARREL + membri)
+  const getQualificheAggregate = (atiItem) => {
+    const map = new Map();
+    
+    console.log('🏆 Calcolo qualifiche aggregate per:', atiItem.codice_ati);
+    console.log('🏆 Qualifiche MARREL:', qualificheMarrel);
+    console.log('🏆 Membri ATI:', atiItem.membri);
+    
+    // 1. Aggiungi qualifiche MARREL
+    qualificheMarrel.forEach(q => {
+      map.set(q.categoria, q);
+    });
+    
+    // 2. Aggiungi qualifiche membri
+    (atiItem.membri || []).forEach(membro => {
+      console.log('🏆 Procesando membro:', membro.ragione_sociale, 'con qualifiche:', membro.qualifiche);
+      (membro.qualifiche || []).forEach(q => {
+        const existing = map.get(q.categoria);
+        if (!existing || parseFloat(q.importo_qualificato) > parseFloat(existing.importo_qualificato)) {
+          map.set(q.categoria, q);
+        }
+      });
+    });
+    
+    const result = Array.from(map.values()).sort((a, b) => a.categoria.localeCompare(b.categoria));
+    console.log('🏆 Risultato finale:', result);
+    return result;
   };
 
   // Statistiche
@@ -92,7 +166,7 @@ function ATI() {
   }, [ati]);
 
   // Aggiungi membro
- const aggiungiMembro = () => {
+  const aggiungiMembro = () => {
     if (!nuovoMembro.ragione_sociale || !nuovoMembro.piva || !nuovoMembro.quota_percentuale) {
       alert('⚠️ Compila tutti i campi del membro');
       return;
@@ -104,14 +178,14 @@ function ATI() {
       return;
     }
 
-    if (totaleQuote + quota > 100) {
-      alert(`⚠️ Il totale delle quote supererebbe il 100% (attuale: ${totaleQuote.toFixed(2)}%)`);
+    if (totaleQuoteMembri + quota > 100) {
+      alert(`⚠️ Il totale delle quote supererebbe il 100% (attuale membri: ${totaleQuoteMembri.toFixed(2)}%)`);
       return;
     }
 
     setMembri([...membri, { 
       ...nuovoMembro,
-      qualifiche: [...qualificheMembro] // Salva le qualifiche del membro
+      qualifiche: [...qualificheMembro]
     }]);
     setNuovoMembro({
       ruolo: 'mandante',
@@ -119,14 +193,15 @@ function ATI() {
       piva: '',
       quota_percentuale: ''
     });
-    setQualificheMembro([]); // Reset qualifiche
+    setQualificheMembro([]);
   };
 
   // Rimuovi membro
   const rimuoviMembro = (index) => {
     setMembri(membri.filter((_, i) => i !== index));
   };
-// Aggiungi qualifica al membro
+
+  // Aggiungi qualifica al membro
   const aggiungiQualificaMembro = () => {
     if (!nuovaQualificaMembro.categoria || !nuovaQualificaMembro.classifica) {
       alert('⚠️ Compila categoria e classifica');
@@ -142,7 +217,6 @@ function ATI() {
       return;
     }
 
-    // Verifica se categoria già presente
     if (qualificheMembro.find(q => q.categoria === nuovaQualificaMembro.categoria)) {
       alert('⚠️ Categoria già presente per questo membro');
       return;
@@ -168,8 +242,7 @@ function ATI() {
       codice_ati: '',
       nome: '',
       tipo: 'orizzontale',
-      mandataria_ragione_sociale: '',
-      mandataria_piva: '',
+      marrel_ruolo: 'mandataria',
       stato: 'costituenda',
       data_costituzione: '',
       data_scioglimento: '',
@@ -187,26 +260,31 @@ function ATI() {
     setEditingId(null);
     setShowForm(false);
   };
+
   // Salva ATI
   const handleSave = async () => {
-    if (!formData.codice_ati || !formData.nome || !formData.mandataria_ragione_sociale) {
-      alert('⚠️ Compila i campi obbligatori:\n- Codice ATI\n- Nome\n- Mandataria');
+    if (!formData.codice_ati || !formData.nome) {
+      alert('⚠️ Compila i campi obbligatori:\n- Codice ATI\n- Nome');
       return;
     }
 
-    if (membri.length === 0) {
-      alert('⚠️ Aggiungi almeno un membro all\'ATI');
+    // ⚡ Verifica ruoli: MARREL + almeno un mandante esterno se MARREL è mandataria
+    if (formData.marrel_ruolo === 'mandataria' && membri.length === 0) {
+      alert('⚠️ Devi aggiungere almeno un membro mandante');
       return;
     }
 
-    const mandataria = membri.find(m => m.ruolo === 'mandataria');
-    if (!mandataria) {
-      alert('⚠️ Deve esserci almeno un membro con ruolo Mandataria');
-      return;
+    // ⚡ Verifica: se MARREL è mandante, deve esserci una mandataria tra i membri
+    if (formData.marrel_ruolo === 'mandante') {
+      const mandataria = membri.find(m => m.ruolo === 'mandataria');
+      if (!mandataria) {
+        alert('⚠️ Se MARREL è mandante, deve esserci un membro con ruolo Mandataria');
+        return;
+      }
     }
 
-    if (Math.abs(totaleQuote - 100) > 0.01) {
-      alert(`⚠️ Il totale delle quote deve essere 100% (attuale: ${totaleQuote.toFixed(2)}%)`);
+    if (Math.abs(totaleQuoteMembri + quotaMarrel - 100) > 0.01) {
+      alert(`⚠️ Il totale delle quote deve essere 100%\n\nMembri: ${totaleQuoteMembri.toFixed(2)}%\nMARREL: ${quotaMarrel.toFixed(2)}%\nTotale: ${(totaleQuoteMembri + quotaMarrel).toFixed(2)}%`);
       return;
     }
 
@@ -216,8 +294,8 @@ function ATI() {
       codice_ati: formData.codice_ati,
       nome: formData.nome,
       tipo: formData.tipo,
-      mandataria_ragione_sociale: formData.mandataria_ragione_sociale,
-      mandataria_piva: formData.mandataria_piva || null,
+      marrel_ruolo: formData.marrel_ruolo,
+      marrel_quota_percentuale: quotaMarrel,
       stato: formData.stato,
       data_costituzione: formData.data_costituzione || null,
       data_scioglimento: formData.data_scioglimento || null,
@@ -228,32 +306,69 @@ function ATI() {
     if (editingId) {
       result = await updateRecord('ati', editingId, dataToSave);
       
-      // TODO: Gestire aggiornamento membri (eliminare vecchi e creare nuovi)
-      // Per semplicità, qui va gestito con logica dedicata
-      
+      if (result.success) {
+        // 1. Elimina tutti i membri esistenti
+        const atiCorrente = ati.find(a => a.id === editingId);
+        if (atiCorrente && atiCorrente.membri) {
+          for (const vecchioMembro of atiCorrente.membri) {
+            await deleteRecord('atiMembri', vecchioMembro.id);
+          }
+        }
+        
+        // 2. Inserisci i nuovi membri
+        for (const membro of membri) {
+          const membroResult = await addRecord('atiMembri', {
+            ati_id: editingId,
+            ruolo: membro.ruolo,
+            ragione_sociale: membro.ragione_sociale,
+            piva: membro.piva,
+            quota_percentuale: parseFloat(membro.quota_percentuale),
+            qualifiche: membro.qualifiche || []
+          });
+          
+          if (!membroResult.success) {
+            console.error('❌ Errore membro:', membroResult.error);
+            alert(`❌ Errore salvando membro: ${membroResult.error}`);
+            setSaving(false);
+            return;
+          }
+        }
+        
+        // 3. Refresh ATI
+        await fetchTable('ati');
+      }
     } else {
-  result = await addRecord('ati', dataToSave);
-  
-  if (result.success && result.data) {
-    // Inserisci membri
-    for (const membro of membri) {
-      const membroResult = await addRecord('atiMembri', {
-        ati_id: result.data.id,
-        ruolo: membro.ruolo,
-        ragione_sociale: membro.ragione_sociale,
-        piva: membro.piva,
-        quota_percentuale: parseFloat(membro.quota_percentuale),
-        qualifiche: membro.qualifiche || []
-      });
+      result = await addRecord('ati', dataToSave);
       
-      if (!membroResult.success) {
-        console.error('❌ Errore membro:', membroResult.error);
-        alert(`❌ Errore: ${membroResult.error}`);
-        break;
+      if (result.success && result.data) {
+        // Inserisci membri
+        console.log('📥 Salvando membri ATI:', membri);
+        for (const membro of membri) {
+          console.log('📥 Salvando membro:', membro);
+          const membroResult = await addRecord('atiMembri', {
+            ati_id: result.data.id,
+            ruolo: membro.ruolo,
+            ragione_sociale: membro.ragione_sociale,
+            piva: membro.piva,
+            quota_percentuale: parseFloat(membro.quota_percentuale),
+            qualifiche: membro.qualifiche || []
+          });
+          
+          if (!membroResult.success) {
+            console.error('❌ Errore membro:', membroResult.error);
+            alert(`❌ Errore salvando membro: ${membroResult.error}`);
+            setSaving(false);
+            return;
+          }
+          console.log('✅ Membro salvato:', membroResult.data);
+        }
+        
+        // ⚡ REFRESH ATI per ricaricare con i membri
+        console.log('🔄 Refresh ATI...');
+        await fetchTable('ati');
+        console.log('✅ ATI refreshata');
       }
     }
-  }
-}
 
     setSaving(false);
 
@@ -282,6 +397,8 @@ function ATI() {
     const result = await deleteRecord('ati', atiItem.id);
     if (result.success) {
       alert('✅ ATI eliminata!');
+      // ⚡ REFRESH per aggiornare la lista
+      await fetchTable('ati');
     } else {
       alert('❌ Errore: ' + result.error);
     }
@@ -289,12 +406,14 @@ function ATI() {
 
   // Edit ATI
   const handleEdit = (atiItem) => {
+    console.log('📝 Editing ATI:', atiItem);
+    console.log('📝 Membri caricati:', atiItem.membri);
+    
     setFormData({
       codice_ati: atiItem.codice_ati,
       nome: atiItem.nome,
       tipo: atiItem.tipo,
-      mandataria_ragione_sociale: atiItem.mandataria_ragione_sociale,
-      mandataria_piva: atiItem.mandataria_piva || '',
+      marrel_ruolo: atiItem.marrel_ruolo,
       stato: atiItem.stato,
       data_costituzione: atiItem.data_costituzione || '',
       data_scioglimento: atiItem.data_scioglimento || '',
@@ -303,16 +422,19 @@ function ATI() {
     
     // Carica membri
     if (atiItem.membri && atiItem.membri.length > 0) {
-      setMembri(atiItem.membri.map(m => ({
-        ruolo: m.ruolo,
-        ragione_sociale: m.ragione_sociale,
-        piva: m.piva,
-        quota_percentuale: m.quota_percentuale,
-        qualifiche: m.qualifiche || []
-      })));
+      const membriCaricati = atiItem.membri.map(m => {
+        console.log('📝 Membro:', m);
+        console.log('📝 Qualifiche membro:', m.qualifiche);
+        return {
+          ruolo: m.ruolo,
+          ragione_sociale: m.ragione_sociale,
+          piva: m.piva,
+          quota_percentuale: m.quota_percentuale,
+          qualifiche: m.qualifiche || []
+        };
+      });
+      setMembri(membriCaricati);
     }
-    
- 
     
     setEditingId(atiItem.id);
     setShowForm(true);
@@ -433,6 +555,35 @@ function ATI() {
               </p>
             </div>
 
+            {/* ⚡ RUOLO MARREL */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Ruolo MARREL SRL *</label>
+              <div className="flex gap-4 mt-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="marrel_ruolo"
+                    value="mandataria"
+                    checked={formData.marrel_ruolo === 'mandataria'}
+                    onChange={(e) => setFormData({...formData, marrel_ruolo: e.target.value})}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">👑 Mandataria</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="marrel_ruolo"
+                    value="mandante"
+                    checked={formData.marrel_ruolo === 'mandante'}
+                    onChange={(e) => setFormData({...formData, marrel_ruolo: e.target.value})}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">🤝 Mandante</span>
+                </label>
+              </div>
+            </div>
+
             {/* Stato */}
             <div>
               <label className="block text-sm font-medium mb-1">Stato</label>
@@ -447,30 +598,6 @@ function ATI() {
                   </option>
                 ))}
               </select>
-            </div>
-
-            {/* Mandataria */}
-            <div className="col-span-1">
-              <label className="block text-sm font-medium mb-1">Mandataria (Capogruppo) *</label>
-              <input
-                type="text"
-                className="border rounded px-3 py-2 w-full"
-                placeholder="Ragione sociale mandataria"
-                value={formData.mandataria_ragione_sociale}
-                onChange={(e) => setFormData({...formData, mandataria_ragione_sociale: e.target.value})}
-              />
-            </div>
-
-            {/* P.IVA Mandataria */}
-            <div>
-              <label className="block text-sm font-medium mb-1">P.IVA Mandataria</label>
-              <input
-                type="text"
-                className="border rounded px-3 py-2 w-full"
-                placeholder="IT12345678901"
-                value={formData.mandataria_piva}
-                onChange={(e) => setFormData({...formData, mandataria_piva: e.target.value})}
-              />
             </div>
 
             {/* Data Costituzione */}
@@ -509,9 +636,32 @@ function ATI() {
             </div>
           </div>
 
+          {/* ⚡ Info MARREL */}
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded text-sm font-medium bg-blue-600 text-white">
+                    🏢 MARREL SRL
+                  </span>
+                  <span className="text-sm text-gray-700">
+                    {formData.marrel_ruolo === 'mandataria' ? '👑 Mandataria' : '🤝 Mandante'}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-600 mt-1">
+                  Qualifiche SOA: {qualificheMarrel.length} categorie
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-gray-600">Quota</div>
+                <div className="text-2xl font-bold text-blue-600">{quotaMarrel.toFixed(2)}%</div>
+              </div>
+            </div>
+          </div>
+
           {/* Sezione Membri ATI */}
           <div className="mt-6 border-t pt-6">
-            <h4 className="font-semibold text-gray-700 mb-4">👥 Membri ATI</h4>
+            <h4 className="font-semibold text-gray-700 mb-4">👥 Altri Membri ATI</h4>
             
             {/* Lista Membri */}
             {membri.length > 0 && (
@@ -560,16 +710,20 @@ function ATI() {
                   </div>
                 ))}
                 
-                {/* Totale Quote */}
+                {/* ⚡ Totale Quote */}
                 <div className="flex justify-end p-3 bg-blue-50 rounded-lg border-2 border-blue-200">
                   <div className="text-right">
-                    <div className="text-sm text-gray-600">Totale Quote</div>
-                    <div className={`text-2xl font-bold ${
-                      Math.abs(totaleQuote - 100) < 0.01 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      {totaleQuote.toFixed(2)}%
+                    <div className="text-sm text-gray-600">Riepilogo Quote</div>
+                    <div className="text-sm text-gray-700 mt-1">
+                      MARREL: <strong>{quotaMarrel.toFixed(2)}%</strong> + 
+                      Altri: <strong>{totaleQuoteMembri.toFixed(2)}%</strong>
                     </div>
-                    {Math.abs(totaleQuote - 100) >= 0.01 && (
+                    <div className={`text-2xl font-bold ${
+                      Math.abs(totaleQuoteMembri + quotaMarrel - 100) < 0.01 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      Totale: {(totaleQuoteMembri + quotaMarrel).toFixed(2)}%
+                    </div>
+                    {Math.abs(totaleQuoteMembri + quotaMarrel - 100) >= 0.01 && (
                       <div className="text-xs text-red-600">Deve essere 100%</div>
                     )}
                   </div>
@@ -635,8 +789,8 @@ function ATI() {
                 </div>
               </div>
             </div>
-         
-{/* Qualifiche del Membro */}
+
+            {/* Qualifiche del Membro */}
             <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
               <h5 className="font-semibold text-gray-700 mb-3">🏆 Qualifiche SOA del Membro</h5>
               <p className="text-xs text-gray-600 mb-3">
@@ -674,44 +828,50 @@ function ATI() {
               {/* Form Aggiungi Qualifica Membro */}
               <div className="grid grid-cols-4 gap-2">
                 <div>
-                  <input
-                    type="text"
+                  <select
                     className="border rounded px-2 py-1 w-full text-sm"
-                    placeholder="Es: OG1, OS3"
                     value={nuovaQualificaMembro.categoria}
-                    onChange={(e) => setNuovaQualificaMembro({...nuovaQualificaMembro, categoria: e.target.value.toUpperCase()})}
-                  />
+                    onChange={(e) => setNuovaQualificaMembro({...nuovaQualificaMembro, categoria: e.target.value})}
+                  >
+                    <option value="">Categoria *</option>
+                    {categorieSOA.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
                   <select
                     className="border rounded px-2 py-1 w-full text-sm"
                     value={nuovaQualificaMembro.classifica}
-                    onChange={(e) => setNuovaQualificaMembro({...nuovaQualificaMembro, classifica: e.target.value})}
+                    onChange={(e) => {
+                      const classificaSelezionata = classificheSOA.find(c => c.value === e.target.value);
+                      setNuovaQualificaMembro({
+                        ...nuovaQualificaMembro, 
+                        classifica: e.target.value,
+                        importo_qualificato: classificaSelezionata?.importo || ''
+                      });
+                    }}
                   >
-                    <option value="">Classifica</option>
-                    <option value="I">I</option>
-                    <option value="II">II</option>
-                    <option value="III">III</option>
-                    <option value="III-bis">III-bis</option>
-                    <option value="IV">IV</option>
-                    <option value="IV-bis">IV-bis</option>
-                    <option value="V">V</option>
-                    <option value="VI">VI</option>
-                    <option value="VII">VII</option>
-                    <option value="VIII">VIII</option>
+                    <option value="">Classifica *</option>
+                    {classificheSOA.map(c => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
                   </select>
                 </div>
 
                 <div>
                   <input
-                    type="number"
-                    step="0.01"
-                    className="border rounded px-2 py-1 w-full text-sm"
+                    type="text"
+                    className="border rounded px-2 py-1 w-full text-sm bg-gray-50"
+                    value={nuovaQualificaMembro.importo_qualificato === 999999999 
+                      ? 'Illimitato' 
+                      : nuovaQualificaMembro.importo_qualificato 
+                        ? `€ ${parseFloat(nuovaQualificaMembro.importo_qualificato).toLocaleString('it-IT')}`
+                        : ''
+                    }
+                    readOnly
                     placeholder="Importo"
-                    value={nuovaQualificaMembro.importo_qualificato}
-                    onChange={(e) => setNuovaQualificaMembro({...nuovaQualificaMembro, importo_qualificato: e.target.value})}
-                    disabled={nuovaQualificaMembro.classifica === 'VIII'}
                   />
                 </div>
 
@@ -758,7 +918,12 @@ function ATI() {
             const statoInfo = getStatoInfo(atiItem.stato);
             const tipoInfo = tipiATI.find(t => t.value === atiItem.tipo);
             const numGare = contaGareCollegate(atiItem.id);
-            const numMembri = atiItem.membri?.length || 0;
+            const numMembri = (atiItem.membri?.length || 0) + 1; // +1 per MARREL
+            const qualificheAgg = getQualificheAggregate(atiItem);
+            
+            console.log('🎨 Rendering ATI:', atiItem.codice_ati);
+            console.log('🎨 Membri trovati:', atiItem.membri);
+            console.log('🎨 Qualifiche aggregate:', qualificheAgg);
 
             return (
               <div key={atiItem.id} className="bg-white rounded-lg shadow p-6">
@@ -776,20 +941,23 @@ function ATI() {
                     <p className="text-gray-700 mb-3">{atiItem.nome}</p>
                     <div className="grid grid-cols-4 gap-4 text-sm">
                       <div>
-                        <span className="text-gray-600">Mandataria:</span>{' '}
-                        <span className="font-medium">{atiItem.mandataria_ragione_sociale}</span>
+                        <span className="text-gray-600">MARREL:</span>{' '}
+                        <span className="font-medium">
+                          {atiItem.marrel_ruolo === 'mandataria' ? '👑 Mandataria' : '🤝 Mandante'} 
+                          ({atiItem.marrel_quota_percentuale?.toFixed(2) || '0'}%)
+                        </span>
                       </div>
                       <div>
-                        <span className="text-gray-600">Membri:</span>{' '}
+                        <span className="text-gray-600">Membri Totali:</span>{' '}
                         <span className="font-medium">{numMembri}</span>
                       </div>
                       <div>
-                        <span className="text-gray-600">Gare Collegate:</span>{' '}
-                        <span className="font-medium">{numGare}</span>
+                        <span className="text-gray-600">Qualifiche:</span>{' '}
+                        <span className="font-medium">{qualificheAgg.length}</span>
                       </div>
                       <div>
-                        <span className="text-gray-600">Costituita il:</span>{' '}
-                        <span className="font-medium">{formatDate(atiItem.data_costituzione)}</span>
+                        <span className="text-gray-600">Gare:</span>{' '}
+                        <span className="font-medium">{numGare}</span>
                       </div>
                     </div>
                   </div>
@@ -812,65 +980,76 @@ function ATI() {
                 </div>
 
                 {/* Membri */}
-                {atiItem.membri && atiItem.membri.length > 0 && (
-                  <div className="border-t pt-4">
-                    <h4 className="font-semibold text-gray-700 mb-3">👥 Membri</h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      {atiItem.membri.map(membro => (
-                        <div key={membro.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                membro.ruolo === 'mandataria' 
-                                  ? 'bg-blue-100 text-blue-700' 
-                                  : 'bg-gray-100 text-gray-700'
-                              }`}>
-                                {membro.ruolo === 'mandataria' ? '👑' : '🤝'}
-                              </span>
-                              <span className="font-semibold text-gray-800">{membro.ragione_sociale}</span>
-                            </div>
-                            <p className="text-xs text-gray-600 mt-1">P.IVA: {membro.piva}</p>
+                <div className="border-t pt-4">
+                  <h4 className="font-semibold text-gray-700 mb-3">👥 Composizione ATI</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* ⚡ MARREL */}
+                    <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border-2 border-blue-300">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-1 rounded text-xs font-medium bg-blue-600 text-white">
+                            🏢 MARREL SRL
+                          </span>
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            atiItem.marrel_ruolo === 'mandataria' 
+                              ? 'bg-blue-100 text-blue-700' 
+                              : 'bg-gray-100 text-gray-700'
+                          }`}>
+                            {atiItem.marrel_ruolo === 'mandataria' ? '👑' : '🤝'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-600 mt-1">
+                          Qualifiche: {qualificheMarrel.length}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-bold text-blue-600">{atiItem.marrel_quota_percentuale?.toFixed(2) || '0'}%</span>
+                      </div>
+                    </div>
+
+                    {/* Altri membri */}
+                    {(atiItem.membri || []).map(membro => (
+                      <div key={membro.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              membro.ruolo === 'mandataria' 
+                                ? 'bg-blue-100 text-blue-700' 
+                                : 'bg-gray-100 text-gray-700'
+                            }`}>
+                              {membro.ruolo === 'mandataria' ? '👑' : '🤝'}
+                            </span>
+                            <span className="font-semibold text-gray-800">{membro.ragione_sociale}</span>
                           </div>
-                          <div className="text-right">
-                            <span className="font-bold text-blue-600">{membro.quota_percentuale}%</span>
-                          </div>
+                          <p className="text-xs text-gray-600 mt-1">
+                            P.IVA: {membro.piva} | Qualifiche: {membro.qualifiche?.length || 0}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-bold text-blue-600">{membro.quota_percentuale}%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ⚡ Qualifiche SOA Aggregate */}
+                {qualificheAgg.length > 0 && (
+                  <div className="border-t pt-4 mt-4">
+                    <h4 className="font-semibold text-gray-700 mb-3">
+                      🏆 Qualifiche SOA Aggregate ({qualificheAgg.length})
+                    </h4>
+                    <div className="grid grid-cols-4 gap-2">
+                      {qualificheAgg.map((qual, idx) => (
+                        <div key={idx} className="p-2 bg-green-50 rounded border border-green-200 text-sm">
+                          <span className="font-bold text-green-700">{qual.categoria}</span>
+                          <span className="text-gray-600"> • </span>
+                          <span className="text-gray-700">Class. {qual.classifica}</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
-
-                {/* Qualifiche SOA Aggregate */}
-                {(() => {
-                  const qualificheAggregate = new Map();
-                  (atiItem.membri || []).forEach(membro => {
-                    (membro.qualifiche || []).forEach(qual => {
-                      const existing = qualificheAggregate.get(qual.categoria);
-                      if (!existing || parseFloat(qual.importo_qualificato) > parseFloat(existing.importo_qualificato)) {
-                        qualificheAggregate.set(qual.categoria, qual);
-                      }
-                    });
-                  });
-                  
-                  const qualArray = Array.from(qualificheAggregate.values());
-                  
-                  return qualArray.length > 0 && (
-                    <div className="border-t pt-4 mt-4">
-                      <h4 className="font-semibold text-gray-700 mb-3">
-                        🏆 Qualifiche SOA Aggregate ({qualArray.length})
-                      </h4>
-                      <div className="grid grid-cols-4 gap-2">
-                        {qualArray.map((qual, idx) => (
-                          <div key={idx} className="p-2 bg-green-50 rounded border border-green-200 text-sm">
-                            <span className="font-bold text-green-700">{qual.categoria}</span>
-                            <span className="text-gray-600"> • </span>
-                            <span className="text-gray-700">Class. {qual.classifica}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
               </div>
             );
           })

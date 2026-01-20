@@ -145,7 +145,7 @@ const [filtroQualifiche, setFiltroQualifiche] = useState('tutte'); // 'tutte' | 
     return giorni;
   };
 
-  const getClasseScadenza = (giorni) => {
+ const getClasseScadenza = (giorni) => {
     if (giorni === null) return '';
     if (giorni < 0) return 'bg-red-100 text-red-700';
     if (giorni <= 7) return 'bg-orange-100 text-orange-700';
@@ -153,156 +153,187 @@ const [filtroQualifiche, setFiltroQualifiche] = useState('tutte'); // 'tutte' | 
     return 'bg-green-100 text-green-700';
   };
 
-  // Verifica qualifiche per una gara (considera anche ATI)
-const verificaQualifiche = (gara) => {
-  if (!gara.categorie_richieste) {
-    return {
-      stato: 'non_specificato',
-      label: '❓ Categorie non specificate',
-      color: 'bg-gray-100 text-gray-700',
-      dettagli: [],
-      puoPartecipare: false,
-      messaggi: ['Categorie SOA non specificate nella gara']
-    };
-  }
-
-  const categorieRichieste = gara.categorie_richieste.split(',').map(c => c.trim());
-  const dettagli = [];
-  let tutteOK = true;
-  let serveATI = false;
-  const messaggi = [];
-
-  // 🤝 Se la gara è in ATI, verifica le qualifiche dell'ATI
-  if (gara.ati_id) {
-    const atiGara = ati.find(a => a.id === gara.ati_id);
+  // ⚡ Calcola qualifiche aggregate ATI (MARREL + membri)
+  const getQualificheAggregateATI = (atiItem) => {
+    const map = new Map();
     
-    if (atiGara && atiGara.qualifiche) {
-      categorieRichieste.forEach(catRichiesta => {
-        const qualificaATI = atiGara.qualifiche.find(q => q.categoria === catRichiesta);
-        
-        if (!qualificaATI) {
-          tutteOK = false;
-          dettagli.push({
-            categoria: catRichiesta,
-            stato: 'mancante',
-            icon: '❌',
-            messaggio: `ATI non possiede ${catRichiesta}`
-          });
-          messaggi.push(`❌ Mancante: ${catRichiesta}`);
-        } else {
-          const importoGara = parseFloat(gara.importo_offerto || gara.importo_appalto || 0);
-          const importoQualificato = parseFloat(qualificaATI.importo_qualificato);
+    // 1. Aggiungi qualifiche MARREL
+    (categorieQualificate || []).forEach(q => {
+      map.set(q.categoria, {
+        categoria: q.categoria,
+        classifica: q.classifica,
+        importo_qualificato: q.importo_qualificato
+      });
+    });
+    
+    // 2. Aggiungi qualifiche membri
+    (atiItem.membri || []).forEach(membro => {
+      (membro.qualifiche || []).forEach(q => {
+        const existing = map.get(q.categoria);
+        if (!existing || parseFloat(q.importo_qualificato) > parseFloat(existing.importo_qualificato)) {
+          map.set(q.categoria, q);
+        }
+      });
+    });
+    
+    return Array.from(map.values());
+  };
 
-          if (importoQualificato === 999999999 || importoQualificato >= importoGara) {
-            dettagli.push({
-              categoria: catRichiesta,
-              stato: 'ok',
-              icon: '✅',
-              messaggio: `${catRichiesta} - ATI qualificata (€${importoQualificato.toLocaleString('it-IT')})`
-            });
-          } else {
+  // Verifica qualifiche per una gara (considera anche ATI)
+  const verificaQualifiche = (gara) => {
+    if (!gara.categorie_richieste) {
+      return {
+        stato: 'non_specificato',
+        label: '❓ Categorie non specificate',
+        color: 'bg-gray-100 text-gray-700',
+        dettagli: [],
+        puoPartecipare: false,
+        messaggi: ['Categorie SOA non specificate nella gara']
+      };
+    }
+
+    const categorieRichieste = gara.categorie_richieste.split(',').map(c => c.trim());
+    const dettagli = [];
+    let tutteOK = true;
+    let serveATI = false;
+    const messaggi = [];
+
+    // 🤝 Se la gara è in ATI, verifica le qualifiche dell'ATI
+    if (gara.ati_id) {
+      const atiGara = ati.find(a => a.id === gara.ati_id);
+      
+      if (atiGara) {
+        // ⚡ CALCOLA QUALIFICHE AGGREGATE (MARREL + membri)
+        const qualificheATI = getQualificheAggregateATI(atiGara);
+        
+        categorieRichieste.forEach(catRichiesta => {
+          const qualificaATI = qualificheATI.find(q => q.categoria === catRichiesta);
+          
+          if (!qualificaATI) {
             tutteOK = false;
             dettagli.push({
               categoria: catRichiesta,
               stato: 'mancante',
               icon: '❌',
-              messaggio: `${catRichiesta} - ATI insufficiente (€${importoQualificato.toLocaleString('it-IT')} < €${importoGara.toLocaleString('it-IT')})`
+              messaggio: `ATI non possiede ${catRichiesta}`
             });
-            messaggi.push(`❌ ${catRichiesta}: importo ATI insufficiente`);
+            messaggi.push(`❌ Mancante: ${catRichiesta}`);
+          } else {
+            const importoGara = parseFloat(gara.importo_offerto || gara.importo_appalto || 0);
+            const importoQualificato = parseFloat(qualificaATI.importo_qualificato);
+
+            if (importoQualificato === 999999999 || importoQualificato >= importoGara) {
+              dettagli.push({
+                categoria: catRichiesta,
+                stato: 'ok',
+                icon: '✅',
+                messaggio: `${catRichiesta} - ATI qualificata Class. ${qualificaATI.classifica} (€${importoQualificato.toLocaleString('it-IT')})`
+              });
+            } else {
+              tutteOK = false;
+              dettagli.push({
+                categoria: catRichiesta,
+                stato: 'mancante',
+                icon: '❌',
+                messaggio: `${catRichiesta} - ATI insufficiente Class. ${qualificaATI.classifica} (€${importoQualificato.toLocaleString('it-IT')} < €${importoGara.toLocaleString('it-IT')})`
+              });
+              messaggi.push(`❌ ${catRichiesta}: importo ATI insufficiente`);
+            }
           }
+        });
+
+        if (tutteOK) {
+          return {
+            stato: 'qualificato',
+            label: '✅ Qualificato (ATI)',
+            color: 'bg-green-100 text-green-800',
+            dettagli,
+            puoPartecipare: true,
+            messaggi: [`Puoi partecipare in ATI: ${atiGara.nome}`]
+          };
+        } else {
+          return {
+            stato: 'non_qualificato',
+            label: '❌ ATI non qualificata',
+            color: 'bg-red-100 text-red-800',
+            dettagli,
+            puoPartecipare: false,
+            messaggi
+          };
         }
-      });
-
-      if (tutteOK) {
-        return {
-          stato: 'qualificato',
-          label: '✅ Qualificato (ATI)',
-          color: 'bg-green-100 text-green-800',
-          dettagli,
-          puoPartecipare: true,
-          messaggi: [`Puoi partecipare in ATI: ${atiGara.nome}`]
-        };
-      } else {
-        return {
-          stato: 'non_qualificato',
-          label: '❌ ATI non qualificata',
-          color: 'bg-red-100 text-red-800',
-          dettagli,
-          puoPartecipare: false,
-          messaggi
-        };
       }
     }
-  }
 
-  // 👤 Verifica qualifiche singole (codice esistente)
-  categorieRichieste.forEach(catRichiesta => {
-    const qualificaPosseduta = (categorieQualificate || []).find(
-      q => q.categoria === catRichiesta
-    );
+    // 👤 Verifica qualifiche singole (codice esistente)
+    categorieRichieste.forEach(catRichiesta => {
+      const qualificaPosseduta = (categorieQualificate || []).find(
+        q => q.categoria === catRichiesta
+      );
 
-    if (!qualificaPosseduta) {
-      tutteOK = false;
-      dettagli.push({
-        categoria: catRichiesta,
-        stato: 'mancante',
-        icon: '❌',
-        messaggio: `Non possiedi ${catRichiesta}`
-      });
-      messaggi.push(`❌ Mancante: ${catRichiesta}`);
+      if (!qualificaPosseduta) {
+        tutteOK = false;
+        dettagli.push({
+          categoria: catRichiesta,
+          stato: 'mancante',
+          icon: '❌',
+          messaggio: `Non possiedi ${catRichiesta}`
+        });
+        messaggi.push(`❌ Mancante: ${catRichiesta}`);
+      } else {
+        const importoGara = parseFloat(gara.importo_offerto || gara.importo_appalto || 0);
+        const importoQualificato = parseFloat(qualificaPosseduta.importo_qualificato);
+
+        if (importoQualificato === 999999999 || importoQualificato >= importoGara) {
+          dettagli.push({
+            categoria: catRichiesta,
+            stato: 'ok',
+            icon: '✅',
+            messaggio: `${catRichiesta} - Classifica ${qualificaPosseduta.classifica} (€${importoQualificato.toLocaleString('it-IT')})`
+          });
+        } else {
+          serveATI = true;
+          dettagli.push({
+            categoria: catRichiesta,
+            stato: 'ati',
+            icon: '⚠️',
+            messaggio: `${catRichiesta} - Classifica ${qualificaPosseduta.classifica} insufficiente (hai €${importoQualificato.toLocaleString('it-IT')}, servono €${importoGara.toLocaleString('it-IT')})`
+          });
+          messaggi.push(`⚠️ ${catRichiesta}: importo insufficiente, serve ATI`);
+        }
+      }
+    });
+
+    if (tutteOK && !serveATI) {
+      return {
+        stato: 'qualificato',
+        label: '✅ Qualificato',
+        color: 'bg-green-100 text-green-800',
+        dettagli,
+        puoPartecipare: true,
+        messaggi: ['Puoi partecipare alla gara in forma singola']
+      };
+    } else if (!tutteOK) {
+      return {
+        stato: 'non_qualificato',
+        label: '❌ Non qualificato',
+        color: 'bg-red-100 text-red-800',
+        dettagli,
+        puoPartecipare: false,
+        messaggi
+      };
     } else {
-      const importoGara = parseFloat(gara.importo_offerto || gara.importo_appalto || 0);
-      const importoQualificato = parseFloat(qualificaPosseduta.importo_qualificato);
-
-      if (importoQualificato === 999999999 || importoQualificato >= importoGara) {
-        dettagli.push({
-          categoria: catRichiesta,
-          stato: 'ok',
-          icon: '✅',
-          messaggio: `${catRichiesta} - Classifica ${qualificaPosseduta.classifica} (€${importoQualificato.toLocaleString('it-IT')})`
-        });
-      } else {
-        serveATI = true;
-        dettagli.push({
-          categoria: catRichiesta,
-          stato: 'ati',
-          icon: '⚠️',
-          messaggio: `${catRichiesta} - Classifica ${qualificaPosseduta.classifica} insufficiente (hai €${importoQualificato.toLocaleString('it-IT')}, servono €${importoGara.toLocaleString('it-IT')})`
-        });
-        messaggi.push(`⚠️ ${catRichiesta}: importo insufficiente, serve ATI`);
-      }
+      return {
+        stato: 'ati',
+        label: '⚠️ Serve ATI',
+        color: 'bg-orange-100 text-orange-800',
+        dettagli,
+        puoPartecipare: true,
+        messaggi: [...messaggi, '💡 Puoi partecipare in ATI (Associazione Temporanea Imprese)']
+      };
     }
-  });
+  };
 
-  if (tutteOK && !serveATI) {
-    return {
-      stato: 'qualificato',
-      label: '✅ Qualificato',
-      color: 'bg-green-100 text-green-800',
-      dettagli,
-      puoPartecipare: true,
-      messaggi: ['Puoi partecipare alla gara in forma singola']
-    };
-  } else if (!tutteOK) {
-    return {
-      stato: 'non_qualificato',
-      label: '❌ Non qualificato',
-      color: 'bg-red-100 text-red-800',
-      dettagli,
-      puoPartecipare: false,
-      messaggi
-    };
-  } else {
-    return {
-      stato: 'ati',
-      label: '⚠️ Serve ATI',
-      color: 'bg-orange-100 text-orange-800',
-      dettagli,
-      puoPartecipare: true,
-      messaggi: [...messaggi, '💡 Puoi partecipare in ATI (Associazione Temporanea Imprese)']
-    };
-  }
-};
+  // Crea cantiere da gara vinta
 // Crea cantiere da gara vinta
 const creaCantiereDaGara = async (gara) => {
   // Verifica che non esista già un cantiere collegato

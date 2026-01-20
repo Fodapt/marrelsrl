@@ -17,10 +17,10 @@ export const DataProvider = ({ children }) => {
   const { authLoading, profile, user } = useAuth();
 
   const [data, setData] = useState({
-  lavoratori: [],
-  cantieri: [],
-  fornitori: [],
-  clienti: [],
+    lavoratori: [],
+    cantieri: [],
+    fornitori: [],
+    clienti: [],
     subappaltatori: [],
     veicoli: [],
     unilav: [],
@@ -47,8 +47,7 @@ export const DataProvider = ({ children }) => {
     qualificheSoa: [],      
     categorieQualificate: [],
     ati: [],
-    atiMembri: [],        
-    atiQualifiche: [] 
+    atiMembri: []
   });
 
   const [loading, setLoading] = useState({
@@ -72,10 +71,10 @@ export const DataProvider = ({ children }) => {
   };
 
   const tableMapping = {
-  lavoratori: 'lavoratori',
-  cantieri: 'cantieri',
-  fornitori: 'fornitori',
-  clienti: 'clienti',
+    lavoratori: 'lavoratori',
+    cantieri: 'cantieri',
+    fornitori: 'fornitori',
+    clienti: 'clienti',
     subappaltatori: 'subappaltatori',
     veicoli: 'veicoli',
     unilav: 'unilav',
@@ -102,8 +101,7 @@ export const DataProvider = ({ children }) => {
     qualificheSoa: 'qualifiche_soa',         
     categorieQualificate: 'categorie_qualificate',
     ati: 'ati',
-    atiMembri: 'ati_membri',          
-    atiQualifiche: 'ati_qualifiche' 
+    atiMembri: 'ati_membri'
   };
 
   const criticalTables = ['lavoratori', 'cantieri', 'fornitori', 'clienti'];
@@ -113,70 +111,83 @@ export const DataProvider = ({ children }) => {
   // FETCH DI UNA TAB.
   // ---------------------------
   const fetchTable = async (key) => {
-  const tableName = tableMapping[key];
-  const startTime = performance.now();
+    const tableName = tableMapping[key];
+    const startTime = performance.now();
+    
+    console.log(`🔵 GET ALL ${tableName} START`);
 
-  setErrors(prev => ({ ...prev, [key]: null }));
+    setErrors(prev => ({ ...prev, [key]: null }));
 
-  try {
-    // ✅ Query speciale per ATI con membri (le qualifiche sono già JSONB dentro membri)
-    if (key === 'ati') {
-      const companyResult = await getUserCompany();
-      if (!companyResult.success) {
-        throw new Error(companyResult.error);
+    try {
+      // ✅ Query speciale per ATI con membri
+      if (key === 'ati') {
+        const companyResult = await getUserCompany();
+        if (!companyResult.success) {
+          throw new Error(companyResult.error);
+        }
+
+        const { data: atiData, error } = await supabase
+          .from(tableName)
+          .select('*, ati_membri(*)')
+          .eq('azienda', companyResult.azienda)
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          console.error(`❌ GET ALL ${tableName} ERROR:`, error);
+          throw error;
+        }
+        
+        // Rinomina ati_membri in membri per compatibilità
+        const atiWithMembers = (atiData || []).map(ati => ({
+          ...ati,
+          membri: ati.ati_membri || []
+        }));
+        
+        const duration = performance.now() - startTime;
+        performanceLog.logQuery(tableName, duration);
+        console.log(`✅ GET ALL ${tableName} SUCCESS (${duration.toFixed(0)}ms): ${atiWithMembers.length} records`);
+        
+        setData(prev => ({ ...prev, [key]: atiWithMembers }));
+        return;
       }
-
-      const { data: atiData, error } = await supabase
-        .from(tableName)
-        .select(`
-          *,
-          membri:ati_membri(*)
-        `)
-        .eq('azienda', companyResult.azienda)
-        .order('created_at', { ascending: false });
       
-      if (error) throw error;
-      
+      // ✅ Per tutte le altre tabelle
+      const result = await supabaseHelpers.getAll(tableName);
       const duration = performance.now() - startTime;
       performanceLog.logQuery(tableName, duration);
-      
-      setData(prev => ({ ...prev, [key]: atiData || [] }));
-      return;
-    }
-    
-    // ✅ Per tutte le altre tabelle
-    const result = await supabaseHelpers.getAll(tableName);
-    const duration = performance.now() - startTime;
-    performanceLog.logQuery(tableName, duration);
 
-    if (result.success) {
-      // Ordina alfabeticamente i dati
-      let sortedData = result.data || [];
-      
-      if (key === 'lavoratori') {
-        sortedData = sortedData.sort((a, b) => 
-          `${a.cognome} ${a.nome}`.localeCompare(`${b.cognome} ${b.nome}`, 'it')
-        );
-      } else if (key === 'fornitori' || key === 'clienti') {
-        sortedData = sortedData.sort((a, b) => 
-          (a.ragione_sociale || '').localeCompare(b.ragione_sociale || '', 'it')
-        );
-      } else if (key === 'cantieri') {
-        sortedData = sortedData.sort((a, b) => 
-          (a.nome || '').localeCompare(b.nome || '', 'it')
-        );
+      if (result.success) {
+        // Ordina alfabeticamente i dati
+        let sortedData = result.data || [];
+        
+        if (key === 'lavoratori') {
+          sortedData = sortedData.sort((a, b) => 
+            `${a.cognome} ${a.nome}`.localeCompare(`${b.cognome} ${b.nome}`, 'it')
+          );
+        } else if (key === 'fornitori' || key === 'clienti') {
+          sortedData = sortedData.sort((a, b) => 
+            (a.ragione_sociale || '').localeCompare(b.ragione_sociale || '', 'it')
+          );
+        } else if (key === 'cantieri') {
+          sortedData = sortedData.sort((a, b) => 
+            (a.nome || '').localeCompare(b.nome || '', 'it')
+          );
+        }
+        
+        console.log(`✅ GET ALL ${tableName} SUCCESS (${duration.toFixed(0)}ms): ${sortedData.length} records`);
+        setData(prev => ({ ...prev, [key]: sortedData }));
+      } else {
+        console.error(`❌ GET ALL ${tableName} ERROR:`, result.error);
+        setErrors(prev => ({ ...prev, [key]: result.error }));
+        setData(prev => ({ ...prev, [key]: [] }));
       }
-      
-      setData(prev => ({ ...prev, [key]: sortedData }));
-    } else {
-      setErrors(prev => ({ ...prev, [key]: result.error }));
+    } catch (error) {
+      console.error(`❌ GET ALL ${tableName} ERROR:`, error);
+      setErrors(prev => ({ ...prev, [key]: error.message }));
       setData(prev => ({ ...prev, [key]: [] }));
     }
-  } catch (error) {
-    setErrors(prev => ({ ...prev, [key]: error.message }));
-    setData(prev => ({ ...prev, [key]: [] }));
-  }
-};
+  };
+
   // ---------------------------
   // FETCH ALL
   // ---------------------------

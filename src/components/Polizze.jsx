@@ -40,13 +40,7 @@ function Polizze() {
     note: ''
   });
 
-  // ✅ DEBUG - Rimuovere dopo aver verificato
-  console.log('🔍 DEBUG Polizze:', {
-    clienti: clienti,
-    numeroClienti: clienti?.length,
-    loading: loading,
-    primoCliente: clienti?.[0]
-  });
+  
 
   // Opzioni
   const tipiPolizza = [
