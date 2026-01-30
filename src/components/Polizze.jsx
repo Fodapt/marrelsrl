@@ -8,6 +8,7 @@ function Polizze() {
     polizze, 
     clienti,
     gare,
+    cantieri,
     addRecord, 
     updateRecord, 
     deleteRecord,
@@ -23,6 +24,7 @@ function Polizze() {
   const [filtroStato, setFiltroStato] = useState('');
   const [filtroCliente, setFiltroCliente] = useState('');
   const [filtroGara, setFiltroGara] = useState('');
+  const [filtroCantiere, setFiltroCantiere] = useState('');
 
   // Form data
   const [formData, setFormData] = useState({
@@ -35,6 +37,7 @@ function Polizze() {
     data_scadenza: '',
     cliente_id: '',
     gara_id: '',
+    cantiere_id: '',
     oggetto_gara: '',
     stato: 'richiesta',
     note: ''
@@ -98,38 +101,42 @@ function Polizze() {
   };
 
   // Filtra polizze
-  const polizzeFiltrate = useMemo(() => {
-    let filtered = [...polizze];
+const polizzeFiltrate = useMemo(() => {
+  let filtered = [...polizze];
 
-    if (filtroTipo) {
-      filtered = filtered.filter(p => p.tipo === filtroTipo);
+  if (filtroTipo) {
+    filtered = filtered.filter(p => p.tipo === filtroTipo);
+  }
+
+  if (filtroStato) {
+    filtered = filtered.filter(p => p.stato === filtroStato);
+  }
+
+  if (filtroCliente) {
+    filtered = filtered.filter(p => p.cliente_id === filtroCliente);
+  }
+
+  if (filtroGara) {
+    filtered = filtered.filter(p => p.gara_id === filtroGara);
+  }
+
+  if (filtroCantiere) {  // ✅ NUOVO
+    filtered = filtered.filter(p => p.cantiere_id === filtroCantiere);
+  }
+
+  return filtered.sort((a, b) => {
+    // Prima per stato (in corso > emessa > richiesta > restituita > escussa)
+    const ordineStato = { 'in_corso': 0, 'emessa': 1, 'richiesta': 2, 'restituita': 3, 'escussa': 4 };
+    if (ordineStato[a.stato] !== ordineStato[b.stato]) {
+      return ordineStato[a.stato] - ordineStato[b.stato];
     }
-
-    if (filtroStato) {
-      filtered = filtered.filter(p => p.stato === filtroStato);
+    // Poi per data scadenza (più vicine prima)
+    if (a.data_scadenza && b.data_scadenza) {
+      return new Date(a.data_scadenza) - new Date(b.data_scadenza);
     }
-
-    if (filtroCliente) {
-      filtered = filtered.filter(p => p.cliente_id === filtroCliente);
-    }
-
-    if (filtroGara) {
-      filtered = filtered.filter(p => p.gara_id === filtroGara);
-    }
-
-    return filtered.sort((a, b) => {
-      // Prima per stato (in corso > emessa > richiesta > restituita > escussa)
-      const ordineStato = { 'in_corso': 0, 'emessa': 1, 'richiesta': 2, 'restituita': 3, 'escussa': 4 };
-      if (ordineStato[a.stato] !== ordineStato[b.stato]) {
-        return ordineStato[a.stato] - ordineStato[b.stato];
-      }
-      // Poi per data scadenza (più vicine prima)
-      if (a.data_scadenza && b.data_scadenza) {
-        return new Date(a.data_scadenza) - new Date(b.data_scadenza);
-      }
-      return 0;
-    });
-  }, [polizze, filtroTipo, filtroStato, filtroCliente, filtroGara]);
+    return 0;
+  });
+}, [polizze, filtroTipo, filtroStato, filtroCliente, filtroGara, filtroCantiere]);  // ✅ AGGIUNGI DIPENDENZA
 
   // Statistiche
   const statistiche = useMemo(() => {
@@ -170,6 +177,7 @@ function Polizze() {
       data_scadenza: '',
       cliente_id: '',
       gara_id: '',
+      cantiere_id: '',
       oggetto_gara: '',
       stato: 'richiesta',
       note: ''
@@ -187,19 +195,20 @@ function Polizze() {
     setSaving(true);
 
     const dataToSave = {
-      tipo: formData.tipo,
-      numero_polizza: formData.numero_polizza,
-      compagnia: formData.compagnia,
-      importo_garantito: formData.importo_garantito ? parseFloat(formData.importo_garantito) : null,
-      percentuale: formData.percentuale ? parseFloat(formData.percentuale) : null,
-      data_emissione: formData.data_emissione || null,
-      data_scadenza: formData.data_scadenza || null,
-      cliente_id: formData.cliente_id || null,
-      gara_id: formData.gara_id || null,
-      oggetto_gara: formData.oggetto_gara || null,
-      stato: formData.stato,
-      note: formData.note || null
-    };
+  tipo: formData.tipo,
+  numero_polizza: formData.numero_polizza,
+  compagnia: formData.compagnia,
+  importo_garantito: formData.importo_garantito ? parseFloat(formData.importo_garantito) : null,
+  percentuale: formData.percentuale ? parseFloat(formData.percentuale) : null,
+  data_emissione: formData.data_emissione || null,
+  data_scadenza: formData.data_scadenza || null,
+  cliente_id: formData.cliente_id || null,
+  gara_id: formData.tipo === 'provvisoria' ? (formData.gara_id || null) : null,  // ✅ SOLO SE PROVVISORIA
+  cantiere_id: formData.tipo !== 'provvisoria' ? (formData.cantiere_id || null) : null,  // ✅ SOLO SE NON PROVVISORIA
+  oggetto_gara: formData.oggetto_gara || null,
+  stato: formData.stato,
+  note: formData.note || null
+};
 
     let result;
     if (editingId) {
@@ -244,6 +253,7 @@ function Polizze() {
       data_scadenza: polizza.data_scadenza || '',
       cliente_id: polizza.cliente_id || '',
       gara_id: polizza.gara_id || '',
+      cantiere_id: polizza.cantiere_id || '',
       oggetto_gara: polizza.oggetto_gara || '',
       stato: polizza.stato,
       note: polizza.note || ''
@@ -255,23 +265,46 @@ function Polizze() {
 
   // Gestione cambio gara (auto-compila oggetto e cliente)
   const handleGaraChange = (garaId) => {
-    const garaSelezionata = gare.find(g => g.id === garaId);
-    
-    if (garaSelezionata) {
-      setFormData(prev => ({
-        ...prev,
-        gara_id: garaId,
-        oggetto_gara: garaSelezionata.titolo,
-        cliente_id: garaSelezionata.cliente_id || prev.cliente_id
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        gara_id: '',
-        oggetto_gara: '',
-      }));
-    }
-  };
+  const garaSelezionata = gare.find(g => g.id === garaId);
+  
+  if (garaSelezionata) {
+    setFormData(prev => ({
+      ...prev,
+      gara_id: garaId,
+      cantiere_id: '',  // ✅ Reset cantiere_id
+      oggetto_gara: garaSelezionata.titolo,
+      cliente_id: garaSelezionata.cliente_id || prev.cliente_id
+    }));
+  } else {
+    setFormData(prev => ({
+      ...prev,
+      gara_id: '',
+      cantiere_id: '',  // ✅ Reset anche qui
+      oggetto_gara: '',
+    }));
+  }
+};
+
+  // Gestione cambio cantiere (auto-compila cliente)
+const handleCantiereChange = (cantiereId) => {
+  const cantiereSelezionato = cantieri.find(c => c.id === cantiereId);
+  
+  if (cantiereSelezionato) {
+    setFormData(prev => ({
+      ...prev,
+      cantiere_id: cantiereId,
+      gara_id: '',  // Reset gara_id
+      cliente_id: cantiereSelezionato.cliente_id || prev.cliente_id,
+      oggetto_gara: cantiereSelezionato.nome || prev.oggetto_gara
+    }));
+  } else {
+    setFormData(prev => ({
+      ...prev,
+      cantiere_id: '',
+      gara_id: ''
+    }));
+  }
+};
 
   if (loading.polizze || loading.clienti) {
     return (
@@ -454,32 +487,64 @@ function Polizze() {
               />
             </div>
 
-            {/* Gara Collegata */}
-            <div className="col-span-3">
-              <label className="block text-sm font-medium mb-1">
-                🎯 Gara Collegata (opzionale)
-              </label>
-              <select
-                className="border rounded px-3 py-2 w-full"
-                value={formData.gara_id}
-                onChange={(e) => handleGaraChange(e.target.value)}
-              >
-                <option value="">-- Nessuna gara --</option>
-                {(gare || []).filter(g => ['interessato', 'in_preparazione', 'presentata', 'in_valutazione', 'vinta'].includes(g.stato)).map(gara => {
-                  const cliente = clienti.find(c => c.id === gara.cliente_id);
-                  return (
-                    <option key={gara.id} value={gara.id}>
-                      {gara.codice_gara} - {gara.titolo.substring(0, 50)}... ({cliente?.ragione_sociale || 'N/D'})
-                    </option>
-                  );
-                })}
-              </select>
-              {formData.gara_id && (
-                <p className="text-xs text-green-600 mt-1">
-                  ✅ Oggetto e cliente compilati automaticamente dalla gara
-                </p>
-              )}
-            </div>
+            {/* ========== COLLEGAMENTO DINAMICO GARA/CANTIERE ========== */}
+<div className="col-span-3">
+  {formData.tipo === 'provvisoria' ? (
+    // PROVVISORIA → SOLO GARA
+    <>
+      <label className="block text-sm font-medium mb-1">
+        🎯 Gara Collegata (opzionale)
+      </label>
+      <select
+        className="border rounded px-3 py-2 w-full"
+        value={formData.gara_id}
+        onChange={(e) => handleGaraChange(e.target.value)}
+      >
+        <option value="">-- Nessuna gara --</option>
+        {(gare || []).filter(g => ['interessato', 'in_preparazione', 'presentata', 'in_valutazione', 'vinta'].includes(g.stato)).map(gara => {
+          const cliente = clienti.find(c => c.id === gara.cliente_id);
+          return (
+            <option key={gara.id} value={gara.id}>
+              {gara.codice_gara} - {gara.titolo.substring(0, 50)}... ({cliente?.ragione_sociale || 'N/D'})
+            </option>
+          );
+        })}
+      </select>
+      {formData.gara_id && (
+        <p className="text-xs text-green-600 mt-1">
+          ✅ Oggetto e cliente compilati automaticamente dalla gara
+        </p>
+      )}
+    </>
+  ) : (
+    // ALTRE POLIZZE → SOLO CANTIERE
+    <>
+      <label className="block text-sm font-medium mb-1">
+        🏗️ Cantiere Collegato (opzionale)
+      </label>
+      <select
+        className="border rounded px-3 py-2 w-full"
+        value={formData.cantiere_id}
+        onChange={(e) => handleCantiereChange(e.target.value)}
+      >
+        <option value="">-- Nessun cantiere --</option>
+        {(cantieri || []).filter(c => c.stato !== 'completato' && c.stato !== 'annullato').map(cantiere => {
+          const cliente = clienti.find(cl => cl.id === cantiere.cliente_id);
+          return (
+            <option key={cantiere.id} value={cantiere.id}>
+              {cantiere.nome.substring(0, 60)}... ({cliente?.ragione_sociale || 'N/D'})
+            </option>
+          );
+        })}
+      </select>
+      {formData.cantiere_id && (
+        <p className="text-xs text-green-600 mt-1">
+          ✅ Cliente compilato automaticamente dal cantiere
+        </p>
+      )}
+    </>
+  )}
+</div>
 
             {/* Cliente */}
             <div>
@@ -556,81 +621,99 @@ function Polizze() {
       )}
 
       {/* Filtri */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Tipo</label>
-            <select
-              className="border rounded px-3 py-2 w-full text-sm"
-              value={filtroTipo}
-              onChange={(e) => setFiltroTipo(e.target.value)}
-            >
-              <option value="">Tutti i tipi</option>
-              {tipiPolizza.map(tipo => (
-                <option key={tipo.value} value={tipo.value}>{tipo.label}</option>
-              ))}
-            </select>
-          </div>
+<div className="bg-white rounded-lg shadow p-4">
+  <div className="grid grid-cols-2 md:grid-cols-6 gap-4">  {/* ✅ CAMBIATO DA 5 A 6 */}
+    <div>
+      <label className="block text-sm font-medium mb-1">Tipo</label>
+      <select
+        className="border rounded px-3 py-2 w-full text-sm"
+        value={filtroTipo}
+        onChange={(e) => setFiltroTipo(e.target.value)}
+      >
+        <option value="">Tutti i tipi</option>
+        {tipiPolizza.map(tipo => (
+          <option key={tipo.value} value={tipo.value}>{tipo.label}</option>
+        ))}
+      </select>
+    </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Stato</label>
-            <select
-              className="border rounded px-3 py-2 w-full text-sm"
-              value={filtroStato}
-              onChange={(e) => setFiltroStato(e.target.value)}
-            >
-              <option value="">Tutti gli stati</option>
-              {statiPolizza.map(stato => (
-                <option key={stato.value} value={stato.value}>{stato.label}</option>
-              ))}
-            </select>
-          </div>
+    <div>
+      <label className="block text-sm font-medium mb-1">Stato</label>
+      <select
+        className="border rounded px-3 py-2 w-full text-sm"
+        value={filtroStato}
+        onChange={(e) => setFiltroStato(e.target.value)}
+      >
+        <option value="">Tutti gli stati</option>
+        {statiPolizza.map(stato => (
+          <option key={stato.value} value={stato.value}>{stato.label}</option>
+        ))}
+      </select>
+    </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Cliente</label>
-            <select
-              className="border rounded px-3 py-2 w-full text-sm"
-              value={filtroCliente}
-              onChange={(e) => setFiltroCliente(e.target.value)}
-            >
-              <option value="">Tutti i clienti</option>
-              {clienti.map(cliente => (
-                <option key={cliente.id} value={cliente.id}>{cliente.ragione_sociale}</option>
-              ))}
-            </select>
-          </div>
+    <div>
+      <label className="block text-sm font-medium mb-1">Cliente</label>
+      <select
+        className="border rounded px-3 py-2 w-full text-sm"
+        value={filtroCliente}
+        onChange={(e) => setFiltroCliente(e.target.value)}
+      >
+        <option value="">Tutti i clienti</option>
+        {clienti.map(cliente => (
+          <option key={cliente.id} value={cliente.id}>{cliente.ragione_sociale}</option>
+        ))}
+      </select>
+    </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Gara</label>
-            <select
-              className="border rounded px-3 py-2 w-full text-sm"
-              value={filtroGara}
-              onChange={(e) => setFiltroGara(e.target.value)}
-            >
-              <option value="">Tutte le gare</option>
-              {(gare || []).map(gara => (
-                <option key={gara.id} value={gara.id}>
-                  {gara.codice_gara}
-                </option>
-              ))}
-            </select>
-          </div>
+    <div>
+      <label className="block text-sm font-medium mb-1">Gara</label>
+      <select
+        className="border rounded px-3 py-2 w-full text-sm"
+        value={filtroGara}
+        onChange={(e) => setFiltroGara(e.target.value)}
+      >
+        <option value="">Tutte le gare</option>
+        {(gare || []).map(gara => (
+          <option key={gara.id} value={gara.id}>
+            {gara.codice_gara}
+          </option>
+        ))}
+      </select>
+    </div>
 
-          <div className="flex items-end">
-            <button
-              onClick={() => {
-                setFiltroTipo('');
-                setFiltroStato('');
-                setFiltroCliente('');
-                setFiltroGara('');
-              }}
-              className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 w-full"
-            >
-              🔄 Reset Filtri
-            </button>
-          </div>
-        </div>
-      </div>
+    {/* ✅ NUOVO FILTRO CANTIERE */}
+    <div>
+      <label className="block text-sm font-medium mb-1">Cantiere</label>
+      <select
+        className="border rounded px-3 py-2 w-full text-sm"
+        value={filtroCantiere}
+        onChange={(e) => setFiltroCantiere(e.target.value)}
+      >
+        <option value="">Tutti i cantieri</option>
+        {(cantieri || []).map(cantiere => (
+          <option key={cantiere.id} value={cantiere.id}>
+            {cantiere.nome.substring(0, 30)}...
+          </option>
+        ))}
+      </select>
+    </div>
+
+    <div className="flex items-end">
+      <button
+        onClick={() => {
+          setFiltroTipo('');
+          setFiltroStato('');
+          setFiltroCliente('');
+          setFiltroGara('');
+          setFiltroCantiere('');  // ✅ AGGIUNGI RESET
+        }}
+        className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 w-full"
+      >
+        🔄 Reset Filtri
+      </button>
+    </div>
+  </div>
+</div>
 
       {/* Tabella */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -641,7 +724,7 @@ function Polizze() {
               <th className="px-4 py-3 text-left">N. Polizza</th>
               <th className="px-4 py-3 text-left">Compagnia</th>
               <th className="px-4 py-3 text-left">Cliente</th>
-              <th className="px-4 py-3 text-left">Gara</th>
+              <th className="px-4 py-3 text-left">Riferimento</th>
               <th className="px-4 py-3 text-left">Importo</th>
               <th className="px-4 py-3 text-left">%</th>
               <th className="px-4 py-3 text-left">Emissione</th>
@@ -653,12 +736,12 @@ function Polizze() {
           <tbody>
             {polizzeFiltrate.length === 0 ? (
               <tr>
-                <td colSpan="11" className="px-4 py-8 text-center text-gray-500">
-                  {filtroTipo || filtroStato || filtroCliente || filtroGara
-                    ? 'Nessuna polizza trovata con i filtri selezionati'
-                    : 'Nessuna polizza registrata. Clicca "+ Nuova Polizza" per iniziare.'}
-                </td>
-              </tr>
+  <td colSpan="11" className="px-4 py-8 text-center text-gray-500">
+    {filtroTipo || filtroStato || filtroCliente || filtroGara || filtroCantiere  
+      ? 'Nessuna polizza trovata con i filtri selezionati'
+      : 'Nessuna polizza registrata. Clicca "+ Nuova Polizza" per iniziare.'}
+  </td>
+</tr>
             ) : (
               polizzeFiltrate.map(polizza => {
                 const tipoInfo = getTipoInfo(polizza.tipo);
@@ -679,14 +762,18 @@ function Polizze() {
                     <td className="px-4 py-3">{polizza.compagnia}</td>
                     <td className="px-4 py-3 text-sm">{cliente?.ragione_sociale || '-'}</td>
                     <td className="px-4 py-3 text-sm">
-                      {gara ? (
-                        <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs">
-                          📋 {gara.codice_gara}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
+  {polizza.gara_id ? (
+    <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs">
+      📋 Gara: {gare.find(g => g.id === polizza.gara_id)?.codice_gara || 'N/D'}
+    </span>
+  ) : polizza.cantiere_id ? (
+    <span className="bg-green-50 text-green-700 px-2 py-1 rounded text-xs">
+      🏗️ Cantiere: {cantieri.find(c => c.id === polizza.cantiere_id)?.nome.substring(0, 20) || 'N/D'}...
+    </span>
+  ) : (
+    <span className="text-gray-400">-</span>
+  )}
+</td>
                     <td className="px-4 py-3 font-medium">{formatCurrency(polizza.importo_garantito)}</td>
                     <td className="px-4 py-3">{polizza.percentuale ? `${polizza.percentuale}%` : '-'}</td>
                     <td className="px-4 py-3 text-sm">{formatDate(polizza.data_emissione)}</td>

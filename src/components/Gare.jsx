@@ -38,6 +38,7 @@ const [filtroQualifiche, setFiltroQualifiche] = useState('tutte'); // 'tutte' | 
     cliente_id: '',
     importo_appalto: '',
     oneri_sicurezza: '',
+    costi_manodopera: '',
     scadenza_presentazione: '',
     data_presentazione: '',
     stato: 'in_preparazione',
@@ -49,7 +50,6 @@ const [filtroQualifiche, setFiltroQualifiche] = useState('tutte'); // 'tutte' | 
     modalita_partecipazione: 'singola',  
     ati_id: '',
     modalita_partecipazione: 'singola',  
-    ati_id: '',
     note: ''
   });
 
@@ -333,10 +333,9 @@ const [filtroQualifiche, setFiltroQualifiche] = useState('tutte'); // 'tutte' | 
     }
   };
 
-  // Crea cantiere da gara vinta
+  
 // Crea cantiere da gara vinta
 const creaCantiereDaGara = async (gara) => {
-  // Verifica che non esista già un cantiere collegato
   const esistente = cantieri.find(c => c.gara_id === gara.id);
   if (esistente) {
     alert(`⚠️ Esiste già un cantiere collegato a questa gara:\n${esistente.nome}`);
@@ -353,19 +352,30 @@ const creaCantiereDaGara = async (gara) => {
     indirizzo: '',
     comune: '',
     importo_contratto: gara.importo_offerto || gara.importo_appalto,
+    oneri_sicurezza: gara.oneri_sicurezza || 0,
+    costi_manodopera: gara.costi_manodopera || 0,  // ✅ TRASFERISCI DA GARA
+    importo_lavori: (gara.importo_offerto || gara.importo_appalto) - (gara.oneri_sicurezza || 0) - (gara.costi_manodopera || 0),  // ✅ INCLUDI NEL CALCOLO
+    ribasso_asta: gara.ribasso_offerto || 0,
     data_inizio: gara.data_aggiudicazione || null,
     data_fine_prevista: null,
     stato: 'pianificato',
     gara_id: gara.id,
     cig: gara.cig || null,
     cup: gara.cup || null,
-    note: `Cantiere creato automaticamente dalla gara ${gara.codice_gara}\nCIG: ${gara.cig || 'N/D'}\nAggiudicato il ${formatDate(gara.data_aggiudicazione)}`
+    note: `Cantiere creato automaticamente dalla gara ${gara.codice_gara}
+CIG: ${gara.cig || 'N/D'}
+Importo Appalto Base: €${parseFloat(gara.importo_appalto || 0).toLocaleString('it-IT', {minimumFractionDigits: 2})}
+Ribasso Offerto: ${gara.ribasso_offerto || 0}%
+Importo Aggiudicato: €${parseFloat(gara.importo_offerto || 0).toLocaleString('it-IT', {minimumFractionDigits: 2})}
+${gara.costi_manodopera ? `Costi Manodopera: €${parseFloat(gara.costi_manodopera).toLocaleString('it-IT', {minimumFractionDigits: 2})}` : ''}
+Aggiudicato il: ${formatDate(gara.data_aggiudicazione)}`
   };
 
   const result = await addRecord('cantieri', nuovoCantiere);
   
   if (result.success) {
-    const apri = confirm('✅ Cantiere creato con successo!\n\nVuoi aprire la sezione Cantieri?');
+    alert('✅ Cantiere creato con successo!');
+    const apri = confirm('Vuoi aprire la sezione Cantieri?');
     if (apri) {
       setActiveTab('cantieri');
     }
@@ -488,6 +498,7 @@ const gareFiltrate = useMemo(() => {
       cliente_id: '',
       importo_appalto: '',
       oneri_sicurezza: '',
+      oneri_sicurezza: '',
       scadenza_presentazione: '',
       data_presentazione: '',
       stato: 'in_preparazione',
@@ -520,6 +531,7 @@ const gareFiltrate = useMemo(() => {
       cliente_id: formData.cliente_id || null,
       importo_appalto: formData.importo_appalto ? parseFloat(formData.importo_appalto) : null,
       oneri_sicurezza: formData.oneri_sicurezza ? parseFloat(formData.oneri_sicurezza) : null,
+      costi_manodopera: formData.costi_manodopera ? parseFloat(formData.costi_manodopera) : null,
       scadenza_presentazione: formData.scadenza_presentazione || null,
       data_presentazione: formData.data_presentazione || null,
       stato: formData.stato,
@@ -574,6 +586,7 @@ const gareFiltrate = useMemo(() => {
       cliente_id: gara.cliente_id || '',
       importo_appalto: gara.importo_appalto || '',
       oneri_sicurezza: gara.oneri_sicurezza || '',
+      costi_manodopera: gara.costi_manodopera || '',
       scadenza_presentazione: gara.scadenza_presentazione || '',
       data_presentazione: gara.data_presentazione || '',
       stato: gara.stato,
@@ -779,6 +792,21 @@ const gareFiltrate = useMemo(() => {
                 onChange={(e) => setFormData({...formData, oneri_sicurezza: e.target.value})}
               />
             </div>
+            {/* ✅ COSTI MANODOPERA - NUOVO CAMPO */}
+<div>
+  <label className="block text-sm font-medium mb-1">Costi Manodopera</label>
+  <input
+    type="number"
+    step="0.01"
+    className="border rounded px-3 py-2 w-full"
+    placeholder="0.00"
+    value={formData.costi_manodopera}
+    onChange={(e) => setFormData({...formData, costi_manodopera: e.target.value})}
+  />
+  <p className="text-xs text-gray-500 mt-1">
+    Se specificato nel bando di gara
+  </p>
+</div>
 
             {/* Scadenza Presentazione */}
             <div>
@@ -896,20 +924,20 @@ const gareFiltrate = useMemo(() => {
             </div>
 
             {/* Ribasso Offerto */}
-            <div>
-              <label className="block text-sm font-medium mb-1">Ribasso Offerto (%)</label>
-              <input
-                type="number"
-                step="0.01"
-                className="border rounded px-3 py-2 w-full"
-                placeholder="Es: 12.50"
-                value={formData.ribasso_offerto}
-                onChange={(e) => setFormData({...formData, ribasso_offerto: e.target.value})}
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Il ribasso che stai calcolando/hai offerto
-              </p>
-            </div>
+<div>
+  <label className="block text-sm font-medium mb-1">Ribasso Offerto (%)</label>
+  <input
+    type="number"
+    step="0.0001"  // ✅ PERMETTE 4 DECIMALI
+    className="border rounded px-3 py-2 w-full"
+    placeholder="Es: 12.3456"
+    value={formData.ribasso_offerto}
+    onChange={(e) => setFormData({...formData, ribasso_offerto: e.target.value})}
+  />
+  <p className="text-xs text-gray-500 mt-1">
+    Il ribasso che stai calcolando/hai offerto (fino a 4 decimali)
+  </p>
+</div>
 
             {/* Polizza Provvisoria */}
             <div>
@@ -1173,16 +1201,16 @@ const gareFiltrate = useMemo(() => {
                           </span>
                         )}
                       </div>
-                      <div>
-                        <span className="text-gray-600">Ribasso:</span>{' '}
-                        {gara.ribasso_offerto ? (
-                          <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-medium">
-                            {gara.ribasso_offerto}%
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </div>
+                     <div>
+  <span className="text-gray-600">Ribasso:</span>{' '}
+  {gara.ribasso_offerto ? (
+    <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-medium">
+      {parseFloat(gara.ribasso_offerto).toFixed(4)}%
+    </span>
+  ) : (
+    <span className="text-gray-400">-</span>
+  )}
+</div>
                     </div>
                   </div>
                   <div className="flex gap-2">

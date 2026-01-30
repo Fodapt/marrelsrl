@@ -33,17 +33,6 @@ function SituazioneFornitori() {
   const [saving, setSaving] = useState(false);
   const [mostraScadenzarioCompleto, setMostraScadenzarioCompleto] = useState(false);
 
-  // ✅ LOADING
-  if (loading.ordiniFornitori || loading.fornitori || loading.cantieri) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Caricamento situazione fornitori...</p>
-        </div>
-      </div>
-    );
-  }
 
   const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -71,18 +60,19 @@ const calcolaAccontiFatturaDiretta = (ordine) => {
   const buoni = ordine.buoni || [];
   const mavRiba = ordine.mav_riba || [];
   
-  const totalePagato = acconti.reduce((sum, acc) => sum + parseFloat(acc.importo || 0), 0);
-  const totaleNoteCredito = noteCredito.reduce((sum, nc) => sum + parseFloat(nc.importo || 0), 0);
-  const totaleBuoni = buoni.reduce((sum, b) => sum + parseFloat(b.importo || 0), 0);
+  // Arrotonda tutti i totali a 2 decimali per evitare errori di precisione
+  const totalePagato = Math.round(acconti.reduce((sum, acc) => sum + parseFloat(acc.importo || 0), 0) * 100) / 100;
+  const totaleNoteCredito = Math.round(noteCredito.reduce((sum, nc) => sum + parseFloat(nc.importo || 0), 0) * 100) / 100;
+  const totaleBuoni = Math.round(buoni.reduce((sum, b) => sum + parseFloat(b.importo || 0), 0) * 100) / 100;
   
   // Solo i MAV/RI.BA effettivamente pagati
-  const totaleMavRibaPagati = mavRiba
+  const totaleMavRibaPagati = Math.round(mavRiba
     .filter(mr => mr.pagato)
-    .reduce((sum, mr) => sum + parseFloat(mr.importo || 0), 0);
+    .reduce((sum, mr) => sum + parseFloat(mr.importo || 0), 0) * 100) / 100;
   
   const importoOriginale = parseFloat(ordine.importo || 0);
-  const totaleEffettivo = importoOriginale - totaleNoteCredito - totaleBuoni;
-  const residuo = totaleEffettivo - totalePagato - totaleMavRibaPagati;
+  const totaleEffettivo = Math.round((importoOriginale - totaleNoteCredito - totaleBuoni) * 100) / 100;
+  const residuo = Math.round((totaleEffettivo - totalePagato - totaleMavRibaPagati) * 100) / 100;
   
   return { 
     totale: importoOriginale, 
@@ -328,7 +318,17 @@ const calcolaAccontiFatturaDiretta = (ordine) => {
       futuro: scadenzarioMavRiba.filter(s => s.categoria === 'futuro').length,
     };
   }, [scadenzarioMavRiba]);
-
+// ✅ LOADING
+if (loading.ordiniFornitori || loading.fornitori || loading.cantieri) {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-gray-600">Caricamento situazione fornitori...</p>
+      </div>
+    </div>
+  );
+}
   // ✅ SALVA ORDINE
   const handleSaveOrdine = async () => {
     if (!ordineFormData.numeroOrdine || !ordineFormData.dataOrdine || !ordineFormData.fornitoreId || !ordineFormData.importo) {
@@ -1489,40 +1489,31 @@ function DettaglioOrdineModal({
         </div>
 
         {/* Riepilogo */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
+<div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
   <div className="bg-blue-50 p-3 rounded border border-blue-200">
-    <div className="text-xs text-blue-700 mb-1">Totale Originale</div>
-    <div className="text-lg font-bold text-blue-900">€ {accInfo.totale.toFixed(2)}</div>
-  </div>
-  <div className="bg-red-50 p-3 rounded border border-red-200">
-    <div className="text-xs text-red-700 mb-1">Note di Credito</div>
-    <div className="text-lg font-bold text-red-900">- € {accInfo.totaleNoteCredito.toFixed(2)}</div>
-  </div>
-  <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
-    <div className="text-xs text-yellow-700 mb-1">Buoni (Sconti)</div>
-    <div className="text-lg font-bold text-yellow-900">- € {accInfo.totaleBuoni.toFixed(2)}</div>
+    <div className="text-xs text-blue-700 mb-1">Totale Ordine</div>
+    <div className="text-lg font-bold text-blue-900">€ {parseFloat(ordine.importo).toFixed(2)}</div>
   </div>
   <div className="bg-purple-50 p-3 rounded border border-purple-200">
-    <div className="text-xs text-purple-700 mb-1">Totale Effettivo</div>
-    <div className="text-lg font-bold text-purple-900">€ {accInfo.totaleEffettivo.toFixed(2)}</div>
+    <div className="text-xs text-purple-700 mb-1">Tot. Fatturato</div>
+    <div className="text-lg font-bold text-purple-900">€ {stato.totaleFatturato.toFixed(2)}</div>
+  </div>
+  <div className="bg-cyan-50 p-3 rounded border border-cyan-200">
+    <div className="text-xs text-cyan-700 mb-1">Residuo Ordine</div>
+    <div className="text-lg font-bold text-cyan-900">€ {stato.residuoOrdine.toFixed(2)}</div>
   </div>
   <div className="bg-green-50 p-3 rounded border border-green-200">
-    <div className="text-xs text-green-700 mb-1">Pagato</div>
-    <div className="text-lg font-bold text-green-900">€ {accInfo.pagato.toFixed(2)}</div>
-    {accInfo.totaleMavRibaPagati > 0 && (
-      <div className="text-xs text-green-600 mt-1">
-        (MAV/RI.BA: € {accInfo.totaleMavRibaPagati.toFixed(2)})
-      </div>
-    )}
+    <div className="text-xs text-green-700 mb-1">Già Pagato</div>
+    <div className="text-lg font-bold text-green-900">€ {stato.effettivamentePagato.toFixed(2)}</div>
   </div>
   <div className={`p-3 rounded border ${
-    accInfo.residuo > 0 ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200'
+    stato.saldoDaPagare > 0 ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200'
   }`}>
-    <div className={`text-xs mb-1 ${accInfo.residuo > 0 ? 'text-orange-700' : 'text-gray-700'}`}>
-      Residuo da Pagare
+    <div className={`text-xs mb-1 ${stato.saldoDaPagare > 0 ? 'text-orange-700' : 'text-gray-700'}`}>
+      Saldo da Pagare
     </div>
-    <div className={`text-lg font-bold ${accInfo.residuo > 0 ? 'text-orange-900' : 'text-gray-900'}`}>
-      € {accInfo.residuo.toFixed(2)}
+    <div className={`text-lg font-bold ${stato.saldoDaPagare > 0 ? 'text-orange-900' : 'text-gray-900'}`}>
+      € {stato.saldoDaPagare.toFixed(2)}
     </div>
   </div>
 </div>
@@ -1853,15 +1844,18 @@ function GestioneAccontiModal({
   const accInfo = calcolaAccontiFatturaDiretta(fattura);
 
   const aggiungiAcconto = async () => {
-    const importo = parseFloat(importoAcconto);
-    if (!importo || importo <= 0) {
-      return alert('⚠️ Inserisci un importo valido');
-    }
+  const importo = parseFloat(importoAcconto);
+  if (!importo || importo <= 0) {
+    return alert('⚠️ Inserisci un importo valido');
+  }
 
-    if (importo > accInfo.residuo) {
-      return alert(`⚠️ L'importo non può superare il residuo di € ${accInfo.residuo.toFixed(2)}`);
-    }
-
+  // Arrotonda entrambi i valori per il confronto ed usa tolleranza di 1 centesimo
+  const importoArrotondato = Math.round(importo * 100) / 100;
+  const residuoArrotondato = Math.round(accInfo.residuo * 100) / 100;
+  
+  if (importoArrotondato > residuoArrotondato + 0.01) {
+    return alert(`⚠️ L'importo non può superare il residuo di € ${residuoArrotondato.toFixed(2)}`);
+  }
     setSaving(true);
 
     const nuovoAcconto = {

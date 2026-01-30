@@ -52,17 +52,7 @@ function ManutenzioneMezzi() {
     { value: 'altro', label: '🔨 Altro' }
   ];
 
-  // Loading
-  if (loading.veicoli || loading.manutenzioniVeicoli || loading.fornitori) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Caricamento manutenzioni...</p>
-        </div>
-      </div>
-    );
-  }
+
 
   // Filtra manutenzioni
   const filteredManutenzioni = useMemo(() => {
@@ -118,6 +108,19 @@ function ManutenzioneMezzi() {
     return { costoTotale, numInterventi, inScadenza, scadute, programmate };
   }, [manutenzioniVeicoli, selectedVeicolo]);
 
+  //LOADING CHECK
+  if (loading.veicoli || loading.manutenzioniVeicoli || loading.fornitori) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Caricamento manutenzioni...</p>
+        </div>
+      </div>
+    );
+  }
+
+
   // Salva manutenzione
   const handleSave = async () => {
     if (!formData.veicolo_id || !formData.data_intervento || !formData.tipo_intervento) {
@@ -128,29 +131,29 @@ function ManutenzioneMezzi() {
     setSaving(true);
 
     const dataToSave = {
-      veicolo_id: formData.veicolo_id,
-      data_intervento: formData.data_intervento,
-      tipo_intervento: formData.tipo_intervento,
-      descrizione: formData.descrizione || null,
-      km_veicolo: formData.km_veicolo ? parseInt(formData.km_veicolo) : null,
-      prossima_data: formData.prossima_data || null,
-      prossimi_km: formData.prossimi_km ? parseInt(formData.prossimi_km) : null,
-      intervallo_km: formData.intervallo_km ? parseInt(formData.intervallo_km) : null,
-      intervallo_mesi: formData.intervallo_mesi ? parseInt(formData.intervallo_mesi) : null,
-      alert_anticipo_giorni: formData.alert_anticipo_giorni ? parseInt(formData.alert_anticipo_giorni) : 30,
-      alert_anticipo_km: formData.alert_anticipo_km ? parseInt(formData.alert_anticipo_km) : 1000,
-      costo: formData.costo ? parseFloat(formData.costo) : null,
-      fornitore: formData.fornitore || null,
-      fattura_numero: formData.fattura_numero || null,
-      note: formData.note || null,
-      completato: formData.completato ?? true
-    };
-
+  azienda: localStorage.getItem('selectedAzienda'), 
+  veicolo_id: formData.veicolo_id,
+  data_intervento: formData.data_intervento,
+  tipo_intervento: formData.tipo_intervento,
+  descrizione: formData.descrizione || null,
+  km_veicolo: formData.km_veicolo ? parseInt(formData.km_veicolo) : null,
+  prossima_data: formData.prossima_data || null,
+  prossimi_km: formData.prossimi_km ? parseInt(formData.prossimi_km) : null,
+  intervallo_km: formData.intervallo_km ? parseInt(formData.intervallo_km) : null,
+  intervallo_mesi: formData.intervallo_mesi ? parseInt(formData.intervallo_mesi) : null,
+  alert_anticipo_giorni: formData.alert_anticipo_giorni ? parseInt(formData.alert_anticipo_giorni) : 30,
+  alert_anticipo_km: formData.alert_anticipo_km ? parseInt(formData.alert_anticipo_km) : 1000,
+  costo: formData.costo ? parseFloat(formData.costo) : null,
+  fornitore: formData.fornitore || null,
+  fattura_numero: formData.fattura_numero || null,
+  note: formData.note || null,
+  completato: formData.completato ?? true
+};
     let result;
     if (editingId) {
-      result = await updateRecord('manutenzioni_veicoli', editingId, dataToSave);
+      result = await updateRecord('manutenzioniVeicoli', editingId, dataToSave);
     } else {
-      result = await addRecord('manutenzioni_veicoli', dataToSave);
+      result = await addRecord('manutenzioniVeicoli', dataToSave);
     }
 
     setSaving(false);
@@ -212,7 +215,7 @@ function ManutenzioneMezzi() {
       return;
     }
 
-    const result = await deleteRecord('manutenzioni_veicoli', manutenzione.id);
+    const result = await deleteRecord('manutenzioniVeicoli', manutenzione.id);
     if (result.success) {
       alert('✅ Manutenzione eliminata!');
     } else {

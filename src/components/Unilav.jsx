@@ -136,18 +136,19 @@ const filteredUnilav = (() => {
     setSaving(true);
 
     const dataForSupabase = {
-      tipo_unilav: formData.tipoUnilav,
-      lavoratore_id: formData.lavoratoreId,
-      cantiere_id: formData.cantiereId || null,
-      data_comunicazione: formData.dataComunicazione || null,
-      data_inizio: formData.dataInizio,
-      data_fine: (formData.tipoContratto === 'indeterminato' && formData.tipoUnilav !== 'distacco_comando') 
-        ? null 
-        : (formData.dataFine || null),
-      livello: formData.livello || null,
-      tipo_contratto: formData.tipoContratto || null,
-      orario: formData.orario || null
-    };
+  tipo_unilav: formData.tipoUnilav,
+  lavoratore_id: formData.lavoratoreId,
+  cantiere_id: formData.cantiereId || null,
+  data_comunicazione: formData.dataComunicazione || null,
+  data_inizio: formData.dataInizio,
+  data_fine: (formData.tipoContratto === 'indeterminato' && formData.tipoUnilav !== 'distacco_comando') 
+    ? null 
+    : (formData.dataFine || null),
+  livello: formData.livello || null,
+  tipo_contratto: formData.tipoContratto || null,
+  orario: formData.orario || null,
+  note: formData.note || null  
+};
 
     let result;
     if (editingId) {
@@ -186,17 +187,18 @@ const filteredUnilav = (() => {
   };
 
   const handleEdit = (u) => {
-    setFormData({
-      tipoUnilav: u.tipo_unilav,
-      lavoratoreId: u.lavoratore_id,
-      cantiereId: u.cantiere_id,
-      dataComunicazione: u.data_comunicazione,
-      dataInizio: u.data_inizio,
-      dataFine: u.data_fine,
-      livello: u.livello,
-      tipoContratto: u.tipo_contratto,
-      orario: u.orario
-    });
+  setFormData({
+    tipoUnilav: u.tipo_unilav,
+    lavoratoreId: u.lavoratore_id,
+    cantiereId: u.cantiere_id,
+    dataComunicazione: u.data_comunicazione,
+    dataInizio: u.data_inizio,
+    dataFine: u.data_fine,
+    livello: u.livello,
+    tipoContratto: u.tipo_contratto,
+    orario: u.orario,
+    note: u.note || ''  
+  });
     setEditingId(u.id);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -415,6 +417,21 @@ const filteredUnilav = (() => {
               </select>
             </div>
           </div>
+            {/* ✅ CAMPO NOTE*/}
+          <div className="mt-4">
+            <label className="block text-sm font-medium mb-1">📝 Note</label>
+            <textarea
+              className="border rounded px-3 py-2 w-full"
+              rows="3"
+              placeholder="Aggiungi note importanti per questo Unilav..."
+              value={formData.note || ''}
+              onChange={(e) => setFormData({...formData, note: e.target.value})}
+              disabled={saving}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Es: Cambio mansione, richieste particolari, scadenze...
+            </p>
+          </div>
           
           <div className="flex gap-2 mt-4">
             <button 
@@ -450,6 +467,7 @@ const filteredUnilav = (() => {
               <th className="px-4 py-3 text-left text-sm font-medium">Fine</th>
               <th className="px-4 py-3 text-left text-sm font-medium">Livello</th>
               <th className="px-4 py-3 text-left text-sm font-medium">Contratto</th>
+              <th className="px-4 py-3 text-left text-sm font-medium">Note</th> 
               <th className="px-4 py-3 text-left text-sm font-medium">Azioni</th>
             </tr>
           </thead>
@@ -482,8 +500,8 @@ const filteredUnilav = (() => {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm font-medium">
-                      {lav ? `${lav.nome} ${lav.cognome}` : 'N/A'}
-                    </td>
+  {lav ? `${lav.nome} ${lav.cognome}` : 'N/A'}
+</td>
                     <td className="px-4 py-3 text-sm">{cant?.nome || 'N/A'}</td>
                     <td className="px-4 py-3 text-sm">{formatDate(u.data_inizio)}</td>
                     <td className="px-4 py-3 text-sm">
@@ -501,6 +519,24 @@ const filteredUnilav = (() => {
                         {u.tipo_contratto === 'indeterminato' ? 'Indet.' : 'Det.'}
                       </span>
                     </td>
+                    {/* ✅ COLONNA NOTE */}
+<td className="px-4 py-3 text-sm">
+  {u.note ? (
+    <span 
+      className="text-blue-600 cursor-pointer hover:text-blue-800" 
+      title="Clicca per leggere la nota"
+      onClick={() => {
+        const lav = lavoratori.find(l => l.id === u.lavoratore_id);
+        const nomeLav = lav ? `${lav.nome} ${lav.cognome}` : 'Lavoratore';
+        alert(`📝 Note per ${nomeLav}:\n\n${u.note}`);
+      }}
+    >
+      📝
+    </span>
+  ) : (
+    <span className="text-gray-300">-</span>
+  )}
+</td>
                     <td className="px-4 py-3 text-sm">
                       <button 
                         onClick={() => handleEdit(u)} 

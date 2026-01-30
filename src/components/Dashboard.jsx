@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
 import { formatDate } from '../utils/dateUtils';
+import { exportLavoratoriPerCantierePDF } from '../utils/exports/exportLavoratoriPerCantierePDF';
 
 function Dashboard() {
   const { 
@@ -208,110 +209,9 @@ rateizzi.forEach(rateizzo => {
     return grouped;
   }, [lavoratoriAttivi, unilav]);
 
-  // ✅ EXPORT PDF LAVORATORI PER CANTIERE
-  const exportPDFLavoratori = () => {
-    const oggi = new Date();
-    const dataStampa = oggi.toLocaleDateString('it-IT', { 
-      day: '2-digit', 
-      month: '2-digit', 
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-
-    let totLavoratori = 0;
-    Object.values(lavoratoriPerCantiere).forEach(lav => {
-      totLavoratori += lav.length;
-    });
-
-    let html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Lavoratori per Cantiere</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; font-size: 11px; }
-    h1 { color: #1e40af; border-bottom: 3px solid #1e40af; padding-bottom: 10px; }
-    h2 { color: #2563eb; margin-top: 25px; margin-bottom: 10px; font-size: 16px; }
-    table { border-collapse: collapse; width: 100%; margin: 15px 0; }
-    th, td { border: 1px solid #333; padding: 8px; text-align: left; }
-    th { background-color: #3b82f6; color: white; font-weight: bold; }
-    tr:nth-child(even) { background-color: #f3f4f6; }
-    .summary { background: #eff6ff; padding: 15px; border-radius: 5px; margin: 20px 0; }
-    .cantiere-box { margin-bottom: 30px; page-break-inside: avoid; }
-    @media print {
-      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      button { display: none !important; }
-      .cantiere-box { page-break-inside: avoid; }
-    }
-  </style>
-</head>
-<body>
-  <button onclick="window.print()" style="background: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px;">
-    🖨️ Stampa / Salva PDF
-  </button>
-  
-  <h1>🏗️ Lavoratori per Cantiere</h1>
-  <p><strong>Data Stampa:</strong> ${dataStampa}</p>
-  
-  <div class="summary">
-    <p><strong>Cantieri Attivi:</strong> ${Object.keys(lavoratoriPerCantiere).length}</p>
-    <p><strong>Lavoratori Totali:</strong> ${totLavoratori}</p>
-  </div>
-`;
-
-    // Genera sezione per ogni cantiere
-    Object.entries(lavoratoriPerCantiere).forEach(([cantiereId, lav]) => {
-      const cantiere = cantieri.find(c => c.id === cantiereId);
-      const nomeCantiere = cantiere ? cantiere.nome : `Cantiere ${cantiereId}`;
-      const indirizzoCantiere = cantiere ? `${cantiere.indirizzo || ''} ${cantiere.citta || ''}`.trim() : '';
-
-      html += `
-  <div class="cantiere-box">
-    <h2>📍 ${nomeCantiere}</h2>
-    ${indirizzoCantiere ? `<p style="margin-top: -10px; color: #666;"><em>${indirizzoCantiere}</em></p>` : ''}
-    <p><strong>Numero Lavoratori:</strong> ${lav.length}</p>
-    
-    <table>
-      <thead>
-        <tr>
-          <th>Nome Completo</th>
-          <th>Qualifica</th>
-          <th>Livello</th>
-          <th>Data Inizio</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${lav.map(l => `
-        <tr>
-          <td><strong>${l.nome} ${l.cognome}</strong></td>
-          <td>${l.qualifica || '-'}</td>
-          <td>${l.livello || '-'}</td>
-          <td>${formatDate(l.data_inizio)}</td>
-        </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  </div>
-`;
-    });
-
-    html += `
-  <div style="margin-top: 30px; padding: 10px; background: #eff6ff; border-top: 2px solid #1e40af; font-size: 9px;">
-    <p>Documento generato automaticamente da Marrel S.r.l. - ${dataStampa}</p>
-  </div>
-</body>
-</html>`;
-
-    const nuovaFinestra = window.open('', '_blank');
-    if (nuovaFinestra) {
-      nuovaFinestra.document.write(html);
-      nuovaFinestra.document.close();
-    } else {
-      alert('⚠️ Popup bloccato! Abilita i popup per questo sito.');
-    }
-  };
+const exportPDFLavoratori = () => {
+  exportLavoratoriPerCantierePDF(lavoratoriPerCantiere, cantieri);
+};
 
   // ✅ LOADING DOPO TUTTI GLI HOOK
   if (loading.lavoratori || loading.cantieri || loading.unilav) {

@@ -6,23 +6,24 @@ import {
 } from './exportHelpers';
 
 /**
- * Esporta PDF con elenco veicoli/automezzi
+ * Esporta PDF con elenco veicoli/automezzi raggruppati per proprietario
  * @param {Object} params - Parametri per l'export
  * @param {Array} params.veicoli - Array veicoli
+ * @param {string} params.nomeAzienda - Nome azienda per footer
  */
 export const exportAutomezziPDF = (params) => {
-  const { veicoli } = params;
+  const { veicoli, nomeAzienda = 'MARREL SRL' } = params;
 
   // ========================================
   // CSS CUSTOM PER AUTOMEZZI
   // ========================================
   const customStyles = `
-    .tipo-section {
+    .proprietario-section {
       margin-bottom: 40px;
       page-break-inside: avoid;
     }
     
-    .tipo-header {
+    .proprietario-header {
       background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
       color: white;
       padding: 15px;
@@ -31,6 +32,14 @@ export const exportAutomezziPDF = (params) => {
       font-weight: bold;
       margin-bottom: 20px;
       -webkit-print-color-adjust: exact !important;
+    }
+    
+    .proprietario-header.azienda {
+      background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
+    }
+    
+    .proprietario-header.noleggio {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
     }
     
     .veicolo-card {
@@ -201,6 +210,17 @@ export const exportAutomezziPDF = (params) => {
       background: #fef3c7 !important;
       border-left-color: #f59e0b;
     }
+    
+    .proprietario-stats {
+      background: #f3f4f6 !important;
+      padding: 10px 15px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      font-size: 11px;
+      display: flex;
+      justify-content: space-between;
+      -webkit-print-color-adjust: exact !important;
+    }
   `;
 
   // ========================================
@@ -247,24 +267,24 @@ export const exportAutomezziPDF = (params) => {
   };
 
   // ========================================
-  // RAGGRUPPA PER TIPO
+  // RAGGRUPPA PER PROPRIETARIO
   // ========================================
-  const veicoliPerTipo = {};
-  const senzaTipo = [];
+  const veicoliPerProprietario = {};
 
   veicoli.forEach(v => {
-    if (v.tipo) {
-      if (!veicoliPerTipo[v.tipo]) {
-        veicoliPerTipo[v.tipo] = [];
-      }
-      veicoliPerTipo[v.tipo].push(v);
-    } else {
-      senzaTipo.push(v);
+    const proprietario = v.proprietario || 'Non specificato';
+    if (!veicoliPerProprietario[proprietario]) {
+      veicoliPerProprietario[proprietario] = [];
     }
+    veicoliPerProprietario[proprietario].push(v);
   });
 
-  // Ordina tipi
-  const tipiOrdinati = Object.keys(veicoliPerTipo).sort();
+  // Ordina proprietari: "Azienda" prima, poi gli altri in ordine alfabetico
+  const proprietariOrdinati = Object.keys(veicoliPerProprietario).sort((a, b) => {
+    if (a === 'Azienda') return -1;
+    if (b === 'Azienda') return 1;
+    return a.localeCompare(b);
+  });
 
   // ========================================
   // CALCOLA STATISTICHE
@@ -289,7 +309,6 @@ export const exportAutomezziPDF = (params) => {
   // ========================================
   const infoBox = `
     <div class="info-box">
-      <p><strong>Azienda:</strong> Marrel S.r.l.</p>
       <p><strong>Data generazione:</strong> ${new Date().toLocaleDateString('it-IT', { 
         day: '2-digit', 
         month: '2-digit', 
@@ -298,6 +317,7 @@ export const exportAutomezziPDF = (params) => {
         minute: '2-digit' 
       })}</p>
       <p><strong>Totale veicoli:</strong> ${veicoli.length}</p>
+      <p><strong>Proprietari:</strong> ${proprietariOrdinati.length}</p>
     </div>
   `;
 
@@ -405,49 +425,40 @@ export const exportAutomezziPDF = (params) => {
   };
 
   // ========================================
-  // GENERA SEZIONI PER TIPO
+  // GENERA SEZIONI PER PROPRIETARIO
   // ========================================
   const generateSezioni = () => {
     let html = '';
 
-    // Tipi ordinati
-    tipiOrdinati.forEach(tipo => {
-      const veicoliTipo = veicoliPerTipo[tipo];
+    proprietariOrdinati.forEach(proprietario => {
+      const veicoliProprietario = veicoliPerProprietario[proprietario];
       
       // Ordina veicoli per targa
-      veicoliTipo.sort((a, b) => (a.targa || '').localeCompare(b.targa || ''));
+      veicoliProprietario.sort((a, b) => (a.targa || '').localeCompare(b.targa || ''));
+
+      // Statistiche per proprietario
+      const tipiPresenti = [...new Set(veicoliProprietario.map(v => v.tipo).filter(Boolean))];
+      
+      const headerClass = proprietario === 'Azienda' ? 'azienda' : (proprietario.toLowerCase().includes('noleggio') ? 'noleggio' : '');
 
       html += `
-        <div class="tipo-section">
-          <div class="tipo-header">
-            ${tipoLabels[tipo] || tipo} (${veicoliTipo.length})
+        <div class="proprietario-section">
+          <div class="proprietario-header ${headerClass}">
+            ${proprietario === 'Azienda' ? '🏢' : '🚛'} ${proprietario} (${veicoliProprietario.length} veicoli)
+          </div>
+          
+          <div class="proprietario-stats">
+            <span><strong>Veicoli:</strong> ${veicoliProprietario.length}</span>
+            <span><strong>Tipologie:</strong> ${tipiPresenti.length > 0 ? tipiPresenti.map(t => tipoLabels[t] || t).join(', ') : 'N/D'}</span>
           </div>
       `;
 
-      veicoliTipo.forEach(v => {
+      veicoliProprietario.forEach(v => {
         html += generateVeicoloCard(v);
       });
 
-      html += `</div>`; // Chiudi tipo-section
+      html += `</div>`; // Chiudi proprietario-section
     });
-
-    // Veicoli senza tipo
-    if (senzaTipo.length > 0) {
-      senzaTipo.sort((a, b) => (a.targa || '').localeCompare(b.targa || ''));
-
-      html += `
-        <div class="tipo-section">
-          <div class="tipo-header">
-            🚜 Altri Veicoli (${senzaTipo.length})
-          </div>
-      `;
-
-      senzaTipo.forEach(v => {
-        html += generateVeicoloCard(v);
-      });
-
-      html += `</div>`; // Chiudi tipo-section
-    }
 
     return html;
   };
@@ -463,11 +474,12 @@ export const exportAutomezziPDF = (params) => {
 
   const htmlDocument = generateCompleteHTML({
     title: '🚛 Elenco Veicoli / Automezzi',
-    subtitle: null,
+    subtitle: `Raggruppati per Proprietario`,
     content: contentHTML,
     customColor: '#059669',
     customStyles: customStyles,
-    buttonText: '🖨️ Stampa / Salva PDF'
+    buttonText: '🖨️ Stampa / Salva PDF',
+    nomeAzienda  // ✅ PASSA nomeAzienda al footer
   });
 
   openPrintWindow(htmlDocument, 'Elenco_Veicoli');

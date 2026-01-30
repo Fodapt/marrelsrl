@@ -272,13 +272,15 @@ export const getDocumentHeader = (title, subtitle = null) => `
   <p style="text-align: center; margin-bottom: 30px;"><strong>Data Stampa:</strong> ${formatDateTime()}</p>
 `;
 
+
 /**
  * Footer standard per tutti gli export
+ * @param {string} nomeAzienda - Nome dell'azienda da mostrare nel footer
  */
-export const getStandardFooter = () => {
+export const getStandardFooter = (nomeAzienda = 'MARREL SRL') => {
   return `
     <div style="margin-top: 40px; padding: 20px; background: #f3f4f6 !important; border-top: 2px solid #1e40af; text-align: center; font-size: 9px; color: #6b7280;">
-      <p style="margin: 0;"><strong>{profile?.azienda}</strong></p>
+      <p style="margin: 0;"><strong>${nomeAzienda}</strong></p>
       <p style="margin: 5px 0;">Documento generato automaticamente dal sistema - ${formatDateTime()}</p>
     </div>
   `;
@@ -331,7 +333,8 @@ export const generateCompleteHTML = (config) => {
     customColor = '#1e40af',
     customStyles = '',
     content,
-    buttonText
+    buttonText,
+    nomeAzienda = 'MARREL SRL'  // ✅ NUOVO PARAMETRO
   } = config;
 
   return `
@@ -347,7 +350,7 @@ export const generateCompleteHTML = (config) => {
   ${getPrintButton(customColor, buttonText)}
   ${getDocumentHeader(title, subtitle)}
   ${content}
-  ${getStandardFooter()}
+  ${getStandardFooter(nomeAzienda)}
 </body>
 </html>
   `;

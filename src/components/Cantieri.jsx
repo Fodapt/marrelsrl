@@ -5,7 +5,7 @@ import { exportCantieriPDF } from '../utils/exports/exportCantieriPDF';
 
 function Cantieri() {
   // ✅ USA IL CONTEXT
-  const { cantieri, gare, ati, loading, addRecord, updateRecord, deleteRecord } = useData();
+  const { cantieri, gare, ati, polizze, loading, addRecord, updateRecord, deleteRecord } = useData();
   
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -15,10 +15,11 @@ function Cantieri() {
 
    // ✅ CALCOLO AUTOMATICO IMPORTO LAVORI
   const importoLavoriCalcolato = () => {
-    const contratto = parseFloat(formData.importoContratto || formData.importo_contratto || 0);
-    const oneri = parseFloat(formData.oneriSicurezza || formData.oneri_sicurezza || 0);
-    return contratto - oneri;
-  };
+  const contratto = parseFloat(formData.importoContratto || formData.importo_contratto || 0);
+  const oneri = parseFloat(formData.oneriSicurezza || formData.oneri_sicurezza || 0);
+  const manodopera = parseFloat(formData.costiManodopera || formData.costi_manodopera || 0);
+  return contratto - oneri - manodopera;
+};
 
   // ✅ MOSTRA LOADING
   if (loading.cantieri) {
@@ -60,6 +61,7 @@ const handleSave = async () => {
     data_fine_prevista: formData.data_fine_prevista || formData.dataFinePrevista || null,
     importo_contratto: formData.importo_contratto || formData.importoContratto ? parseFloat(formData.importo_contratto || formData.importoContratto) : null,
     oneri_sicurezza: formData.oneri_sicurezza || formData.oneriSicurezza ? parseFloat(formData.oneri_sicurezza || formData.oneriSicurezza) : 0,
+     costi_manodopera: formData.costi_manodopera || formData.costiManodopera ? parseFloat(formData.costi_manodopera || formData.costiManodopera) : 0,
     importo_lavori: importoLavoriCalcolato(), // ← CALCOLO AUTOMATICO
     codice_commessa: formData.codice_commessa || formData.codiceCommessa || null,
     tipologia_lavoro: formData.tipologia_lavoro || formData.tipologiaLavoro || null,
@@ -173,6 +175,8 @@ collaudatore_pec: formData.collaudatore_pec || formData.collaudatorePec || null,
     tipologiaLavoro: cantiere.tipologia_lavoro,
     oneri_sicurezza: cantiere.oneri_sicurezza,
     oneriSicurezza: cantiere.oneri_sicurezza,
+    costi_manodopera: cantiere.costi_manodopera, 
+    costiManodopera: cantiere.costi_manodopera,
     ribasso_asta: cantiere.ribasso_asta,
     ribassoAsta: cantiere.ribasso_asta,
     modalita_calcolo_sal: cantiere.modalita_calcolo_sal,
@@ -438,7 +442,16 @@ const statoLabels = {
               onChange={(e) => setFormData({...formData, oneriSicurezza: e.target.value, oneri_sicurezza: e.target.value})}
               disabled={saving}
             />
-
+{/* ✅ 2.5 COSTI MANODOPERA - NUOVO CAMPO */}
+<input 
+  type="number" 
+  step="0.01"
+  placeholder="Costi Manodopera €" 
+  className="border rounded px-3 py-2"
+  value={formData.costiManodopera || formData.costi_manodopera || ''} 
+  onChange={(e) => setFormData({...formData, costiManodopera: e.target.value, costi_manodopera: e.target.value})}
+  disabled={saving}
+/>
             {/* 3. IMPORTO LAVORI - CALCOLATO AUTOMATICAMENTE */}
             <div className="col-span-2 bg-blue-50 p-3 rounded border border-blue-200">
               <div className="flex justify-between items-center">
@@ -467,7 +480,7 @@ const statoLabels = {
             {/* 5. RIBASSO D'ASTA */}
             <input 
               type="number" 
-              step="0.01"
+              step="0.0001" 
               min="0"
               max="100"
               placeholder="Ribasso d'Asta %" 
@@ -765,6 +778,32 @@ const statoLabels = {
       );
     }
   })()}
+  {/* ✅ BADGE POLIZZE CON TIPI */}
+{(() => {
+  const polizzeAttive = (polizze || []).filter(p => 
+    p.cantiere_id === cant.id && 
+    ['richiesta', 'emessa', 'in_corso'].includes(p.stato)
+  );
+  
+  if (polizzeAttive.length === 0) return null;
+  
+  const tipiPolizze = polizzeAttive.map(p => {
+    const tipi = {
+      definitiva: 'Def',
+      buona_esecuzione: 'BE',
+      anticipazione: 'Ant',
+      car: 'CAR',
+      rct: 'RCT'
+    };
+    return tipi[p.tipo] || p.tipo.substring(0, 3);
+  }).join(', ');
+  
+  return (
+    <span className="px-3 py-1 rounded text-sm bg-amber-100 text-amber-700 font-medium">
+      🛡️ {tipiPolizze}
+    </span>
+  );
+})()}
                     </div>
                     <p className="text-gray-600">{cant.indirizzo}</p>
                   </div>
@@ -812,10 +851,10 @@ const statoLabels = {
                     </div>
                   )}
                   {cant.ribasso_asta > 0 && (
-                    <div>
-                      <span className="text-gray-600 font-medium">Ribasso:</span> {parseFloat(cant.ribasso_asta).toFixed(2)}%
-                    </div>
-                  )}
+  <div>
+    <span className="text-gray-600 font-medium">Ribasso:</span> {parseFloat(cant.ribasso_asta).toFixed(4)}%
+  </div>
+)}
 
                   <div>
                     <span className="text-gray-600 font-medium">Inizio:</span> {formatDate(cant.data_inizio)}

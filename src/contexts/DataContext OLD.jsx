@@ -50,39 +50,9 @@ export const DataProvider = ({ children }) => {
     atiMembri: []
   });
 
-  // ✅ FIX: Inizializza loading con una chiave per ogni tabella
   const [loading, setLoading] = useState({
-    lavoratori: true,
-    cantieri: true,
-    fornitori: true,
-    clienti: true,
-    subappaltatori: true,
-    veicoli: true,
-    unilav: true,
-    presenze: true,
-    notePresenze: true,
-    certificazioni: true,
-    sal: true,
-    fattureEmesse: true,
-    acconti: true,
-    rateizzi: true,
-    noteRateizzi: true,
-    rate: true,
-    movimentiContabili: true,
-    settings: true,
-    storicoPaghe: true,
-    dttFormulari: true,
-    cassaEdileLavoratori: true,
-    cassaEdileTotali: true,
-    ordiniFornitori: true,
-    documenti: true,
-    manutenzioniVeicoli: true,
-    polizze: true,
-    gare: true,
-    qualificheSoa: true,
-    categorieQualificate: true,
-    ati: true,
-    atiMembri: true
+    critical: true,
+    secondary: true
   });
 
   const [errors, setErrors] = useState({});
@@ -138,18 +108,10 @@ export const DataProvider = ({ children }) => {
   const secondaryTables = Object.keys(tableMapping).filter(k => !criticalTables.includes(k));
 
   // ---------------------------
-  // FETCH DI UNA TABELLA
+  // FETCH DI UNA TAB.
   // ---------------------------
   const fetchTable = async (key) => {
     const tableName = tableMapping[key];
-    
-    // ✅ Validazione: se tableName è undefined, salta
-    if (!tableName) {
-      console.error(`❌ Table key "${key}" not found in tableMapping`);
-      setLoading(prev => ({ ...prev, [key]: false }));
-      return;
-    }
-
     const startTime = performance.now();
     
     console.log(`🔵 GET ALL ${tableName} START`);
@@ -186,7 +148,6 @@ export const DataProvider = ({ children }) => {
         console.log(`✅ GET ALL ${tableName} SUCCESS (${duration.toFixed(0)}ms): ${atiWithMembers.length} records`);
         
         setData(prev => ({ ...prev, [key]: atiWithMembers }));
-        setLoading(prev => ({ ...prev, [key]: false })); // ✅ Imposta loading a false
         return;
       }
       
@@ -224,40 +185,25 @@ export const DataProvider = ({ children }) => {
       console.error(`❌ GET ALL ${tableName} ERROR:`, error);
       setErrors(prev => ({ ...prev, [key]: error.message }));
       setData(prev => ({ ...prev, [key]: [] }));
-    } finally {
-      // ✅ Imposta sempre loading a false alla fine
-      setLoading(prev => ({ ...prev, [key]: false }));
     }
   };
 
   // ---------------------------
   // FETCH ALL
   // ---------------------------
- const fetchAllData = async () => {
-  console.log('📊 DataContext: Loading all data…');
+  const fetchAllData = async () => {
+    console.log('📊 DataContext: Loading all data…');
 
-  // CRITICAL FIRST (carica subito le tabelle principali)
-  await Promise.allSettled(criticalTables.map(fetchTable));
+    // CRITICAL FIRST
+    await Promise.allSettled(criticalTables.map(fetchTable));
+    setLoading(prev => ({ ...prev, critical: false }));
 
-  // SECONDARY in BATCH di 5 tabelle alla volta per evitare timeout
-  const batchSize = 5;
-  for (let i = 0; i < secondaryTables.length; i += batchSize) {
-    const batch = secondaryTables.slice(i, i + batchSize);
-    const batchNum = Math.floor(i / batchSize) + 1;
-    const totalBatches = Math.ceil(secondaryTables.length / batchSize);
-    
-    console.log(`📦 Loading batch ${batchNum}/${totalBatches}: [${batch.join(', ')}]`);
-    
-    await Promise.allSettled(batch.map(fetchTable));
-    
-    // Piccola pausa tra i batch per non sovraccaricare Supabase
-    if (i + batchSize < secondaryTables.length) {
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
-  }
+    // SECONDARY
+    await Promise.allSettled(secondaryTables.map(fetchTable));
+    setLoading(prev => ({ ...prev, secondary: false }));
 
-  console.log('✅ Data fully loaded');
-};
+    console.log('✅ Data fully loaded');
+  };
 
   // ---------------------------
   // SYNC WITH AUTH CONTEXT
@@ -276,11 +222,6 @@ export const DataProvider = ({ children }) => {
   // ---------------------------
   const addRecord = async (key, record) => {
     const tableName = tableMapping[key];
-    if (!tableName) {
-      console.error(`❌ Table key "${key}" not found in tableMapping`);
-      return { success: false, error: 'Invalid table key' };
-    }
-    
     const result = await supabaseHelpers.create(tableName, record);
     if (result.success) {
       setData(prev => ({ ...prev, [key]: [result.data, ...prev[key]] }));
@@ -290,11 +231,6 @@ export const DataProvider = ({ children }) => {
 
   const updateRecord = async (key, id, updates) => {
     const tableName = tableMapping[key];
-    if (!tableName) {
-      console.error(`❌ Table key "${key}" not found in tableMapping`);
-      return { success: false, error: 'Invalid table key' };
-    }
-    
     const result = await supabaseHelpers.update(tableName, id, updates);
     if (result.success) {
       setData(prev => ({
@@ -307,11 +243,6 @@ export const DataProvider = ({ children }) => {
 
   const deleteRecord = async (key, id) => {
     const tableName = tableMapping[key];
-    if (!tableName) {
-      console.error(`❌ Table key "${key}" not found in tableMapping`);
-      return { success: false, error: 'Invalid table key' };
-    }
-    
     const result = await supabaseHelpers.delete(tableName, id);
     if (result.success) {
       setData(prev => ({
@@ -340,7 +271,6 @@ export const DataProvider = ({ children }) => {
     ...data,
     loading,
     errors,
-    profile,
     fetchTable,
     fetchAllData,
     addRecord,

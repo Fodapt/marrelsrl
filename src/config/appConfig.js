@@ -7,7 +7,7 @@ export const APP_CONFIG = {
   companyName: "Marrel S.r.l.",
   
   // Versione applicazione
-  version: "4.6",
+  version: "4.7",
   
   // Informazioni sviluppatore
   developer: "Andri Prydryk",

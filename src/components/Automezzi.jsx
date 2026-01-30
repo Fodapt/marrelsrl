@@ -5,7 +5,7 @@ import { exportAutomezziPDF } from '../utils/exports/exportAutomezziPDF';
 
 function Automezzi() {
   // ✅ USA IL CONTEXT - Nota: la tabella si chiama "veicoli" in Supabase
-  const { veicoli, loading, addRecord, updateRecord, deleteRecord } = useData();
+  const { veicoli, profile, loading, addRecord, updateRecord, deleteRecord } = useData();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -36,15 +36,16 @@ function Automezzi() {
 
     // Converti i campi per Supabase (snake_case)
     const dataForSupabase = {
-      targa: formData.targa,
-      marca: formData.marca || null,
-      modello: formData.modello || null,
-      anno: formData.anno || null,  // ← FIX: stringa vuota → null
-      tipo: formData.tipo || null,
-      scadenza_assicurazione: formData.scadenza_assicurazione || formData.scadenzaAssicurazione || null,  // ← FIX
-      scadenza_revisione: formData.scadenza_revisione || formData.scadenzaRevisione || null,  // ← FIX
-      note: formData.note || null
-    };
+  targa: formData.targa,
+  marca: formData.marca || null,
+  modello: formData.modello || null,
+  anno: formData.anno || null,
+  tipo: formData.tipo || null,
+  proprietario: formData.proprietario || 'Azienda',  
+  scadenza_assicurazione: formData.scadenza_assicurazione || formData.scadenzaAssicurazione || null,
+  scadenza_revisione: formData.scadenza_revisione || formData.scadenzaRevisione || null,
+  note: formData.note || null
+};
 
     let result;
     if (editingId) {
@@ -81,30 +82,31 @@ function Automezzi() {
   };
 
   const handleEdit = (auto) => {
-    // Converti da snake_case a camelCase per il form
-    setFormData({
-      targa: auto.targa,
-      marca: auto.marca,
-      modello: auto.modello,
-      anno: auto.anno,
-      tipo: auto.tipo,
-      scadenza_assicurazione: auto.scadenza_assicurazione,
-      scadenzaAssicurazione: auto.scadenza_assicurazione,  // Compatibilità
-      scadenza_revisione: auto.scadenza_revisione,
-      scadenzaRevisione: auto.scadenza_revisione,  // Compatibilità
-      note: auto.note
-    });
+  setFormData({
+    targa: auto.targa,
+    marca: auto.marca,
+    modello: auto.modello,
+    anno: auto.anno,
+    tipo: auto.tipo,
+    proprietario: auto.proprietario || 'Azienda',  
+    scadenza_assicurazione: auto.scadenza_assicurazione,
+    scadenzaAssicurazione: auto.scadenza_assicurazione,
+    scadenza_revisione: auto.scadenza_revisione,
+    scadenzaRevisione: auto.scadenza_revisione,
+    note: auto.note
+  });
     setEditingId(auto.id);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const filtered = veicoli.filter(a => 
-    a.targa?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    a.marca?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    a.modello?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    a.tipo?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  a.targa?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  a.marca?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  a.modello?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  a.tipo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  a.proprietario?.toLowerCase().includes(searchTerm.toLowerCase())  
+);
 
   // Calcola scadenze
   const calcolaStatoScadenza = (dataScadenza) => {
@@ -152,10 +154,11 @@ function Automezzi() {
 
   // ✅ ESPORTA PDF
   const esportaPDF = () => {
-    exportAutomezziPDF({
-      veicoli: filtered
-    });
-  };
+  exportAutomezziPDF({
+    veicoli: filtered,
+    nomeAzienda: profile?.azienda || 'Azienda'
+  });
+};
 
   return (
     <div className="space-y-4">
@@ -187,12 +190,12 @@ function Automezzi() {
 
       <div className="flex justify-between items-center gap-4">
         <input
-          type="text"
-          placeholder="🔍 Cerca per targa, marca, modello o tipo..."
-          className="border rounded px-3 py-2 flex-1 max-w-md"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+  type="text"
+  placeholder="🔍 Cerca per targa, marca, modello, tipo o proprietario..."  
+  className="border rounded px-3 py-2 flex-1 max-w-md"
+  value={searchTerm}
+  onChange={(e) => setSearchTerm(e.target.value)}
+/>
         <div className="flex gap-2">
           <button
             onClick={() => {
@@ -276,6 +279,21 @@ function Automezzi() {
               <option value="camion">Camion</option>
               <option value="altro">Altro</option>
             </select>
+            {/* ✅ CAMPO PROPRIETARIO - NUOVO */}
+<div>
+  <label className="block text-sm font-medium mb-1">Proprietario</label>
+  <input 
+    type="text" 
+    placeholder="Azienda" 
+    className="border rounded px-3 py-2 w-full"
+    value={formData.proprietario || 'Azienda'} 
+    onChange={(e) => setFormData({...formData, proprietario: e.target.value})}
+    disabled={saving}
+  />
+  <p className="text-xs text-gray-500 mt-1">
+    Es: Azienda, Noleggio XYZ, ATI Partner, Subappaltatore ABC
+  </p>
+</div>
             <div>
               <label className="block text-sm font-medium mb-1">Scadenza Assicurazione</label>
               <input 
@@ -336,6 +354,7 @@ function Automezzi() {
               <th className="px-4 py-3 text-left text-sm font-medium">Marca/Modello</th>
               <th className="px-4 py-3 text-left text-sm font-medium">Anno</th>
               <th className="px-4 py-3 text-left text-sm font-medium">Tipo</th>
+              <th className="px-4 py-3 text-left text-sm font-medium">Proprietario</th>
               <th className="px-4 py-3 text-left text-sm font-medium">Assicurazione</th>
               <th className="px-4 py-3 text-left text-sm font-medium">Stato Ass.</th>
               <th className="px-4 py-3 text-left text-sm font-medium">Revisione</th>
@@ -354,11 +373,21 @@ function Automezzi() {
                   <td className="px-4 py-3 text-sm">{auto.marca} {auto.modello}</td>
                   <td className="px-4 py-3 text-sm">{auto.anno}</td>
                   <td className="px-4 py-3 text-sm">
-                    <span className="px-2 py-1 rounded text-xs bg-blue-100">
-                      {auto.tipo || '-'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm">{formatDate(auto.scadenza_assicurazione)}</td>
+  <span className="px-2 py-1 rounded text-xs bg-blue-100">
+    {auto.tipo || '-'}
+  </span>
+</td>
+{/* ✅ COLONNA PROPRIETARIO */}
+<td className="px-4 py-3 text-sm">
+  <span className={`px-2 py-1 rounded text-xs font-medium ${
+    auto.proprietario === 'Azienda' 
+      ? 'bg-green-100 text-green-700' 
+      : 'bg-orange-100 text-orange-700'
+  }`}>
+    {auto.proprietario || 'Azienda'}
+  </span>
+</td>
+<td className="px-4 py-3 text-sm">{formatDate(auto.scadenza_assicurazione)}</td>
                   <td className="px-4 py-3 text-sm">
                     <span className={`px-2 py-1 rounded text-xs font-medium ${statoAss.color}`}>
                       {statoAss.label}
